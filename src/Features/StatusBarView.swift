@@ -18,6 +18,11 @@ struct StatusBarView: View {
     var onFitToWindow: () -> Void
     var onZoom: (CGFloat) -> Void
 
+    /// 「大小」显示的是 PNG 编码后的字节数(和 Windows 画图一致)。
+    /// PNG 编码一张 1200×630 的图要几十毫秒,拖动画笔时每帧都算会卡,
+    /// 所以防抖 300ms 再更新。
+    @State private var encodedSize: Int = 0
+
     /// 原版状态栏实际高度:938..983,共 46pt(不是 28)
     private static let barHeight: CGFloat = 46
 
@@ -48,7 +53,7 @@ struct StatusBarView: View {
                     .offset(x: 344, y: 13)
 
                 Text(verbatim: "\(Int(document.size.width)) × \(Int(document.size.height))像素")
-                    .font(.system(size: 13.7, weight: .medium))
+                    .font(.system(size: 13.7, weight: .light))
                     .monospacedDigit()
                     .foregroundStyle(WIPaint.ink)
                     .offset(x: 371, y: 15)
@@ -58,8 +63,8 @@ struct StatusBarView: View {
                 WIBitmapIcon(name: "floppy")
                     .offset(x: 515, y: 12)
 
-                Text(verbatim: "大小: \(ByteFormat.string(Int(document.size.width * document.size.height * 4)))")
-                    .font(.system(size: 13.7, weight: .medium))
+                Text(verbatim: "大小: \(ByteFormat.string(encodedSize))")
+                    .font(.system(size: 13.7, weight: .light))
                     .monospacedDigit()
                     .foregroundStyle(WIPaint.ink)
                     .offset(x: 546, y: 15)
@@ -75,6 +80,11 @@ struct StatusBarView: View {
         .font(.system(size: 13, weight: .medium))
         .frame(height: Self.barHeight)
         .background(WIMica.horizontal(WIMica.workspaceBottom))
+        .task(id: document.renderVersion) {
+            // 防抖:画面停 300ms 才去算 PNG 体积
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            encodedSize = document.encodedByteSize()
+        }
     }
 
     // MARK: - 右侧缩放组(绝对坐标)

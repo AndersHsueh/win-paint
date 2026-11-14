@@ -20,9 +20,9 @@ struct TitleBarRow: View {
                 // macOS 没有 Segoe UI,用系统字体的 14.5pt regular 对齐:
                 //   拉丁部分墨迹宽 232px(原版 228)、" - 画图" 43px(原版 43)
                 //   x-height 7.7px(原版 8)、基线 y=23
-                .font(.system(size: 14.5, weight: .regular))
+                .font(.system(size: 14.25, weight: .regular))
                 .foregroundStyle(WIPaint.ink)
-                .offset(x: 37, y: 10)
+                .offset(x: 36, y: 10)
                 .allowsHitTesting(false)
 
             WindowButtonStrip()
@@ -236,7 +236,7 @@ struct MenuBarRow: View {
         .frame(width: 48, height: 26)
         .background(alignment: .topLeading) {
             Text("文件")
-                .font(.system(size: 19))
+                .font(.system(size: 19, weight: .light))
                 .foregroundStyle(WIPaint.ink)
                 .offset(x: 0, y: 21)
         }
@@ -265,7 +265,7 @@ struct MenuBarRow: View {
         .frame(width: 48, height: 26)
         .background(alignment: .topLeading) {
             Text("编辑")
-                .font(.system(size: 19))
+                .font(.system(size: 19, weight: .light))
                 .foregroundStyle(WIPaint.ink)
                 .offset(x: 0, y: 21)
         }
@@ -311,7 +311,7 @@ struct MenuBarRow: View {
         .frame(width: 48, height: 26)
         .background(alignment: .topLeading) {
             Text("查看")
-                .font(.system(size: 19))
+                .font(.system(size: 19, weight: .light))
                 .foregroundStyle(WIPaint.ink)
                 .offset(x: 0, y: 21)
         }
@@ -335,21 +335,21 @@ struct RibbonView: View {
     var body: some View {
         ZStack(alignment: .topLeading) {
             HStack(alignment: .top, spacing: 0) {
-                group(width: 71, label: "选择") { selectContent }
+                group(width: 71, label: "选择", labelX: 21) { selectContent }
                 separator
-                group(width: 197, label: "图像") { imageContent }
+                group(width: 197, label: "图像", labelX: 85) { imageContent }
                 separator
-                group(width: 170, label: "工具") { toolContent }
+                group(width: 170, label: "工具", labelX: 70) { toolContent }
                 separator
-                group(width: 64, label: "画笔") { brushContent }
+                group(width: 64, label: "画笔", labelX: 20) { brushContent }
                 separator
-                group(width: 310, label: "形状") { shapeContent }
+                group(width: 310, label: "形状", labelX: 143) { shapeContent }
                 separator
-                group(width: 440, label: "颜色") { colorContent }
+                group(width: 440, label: "颜色", labelX: 205) { colorContent }
                 separator
-                group(width: 79, label: "Copilot") { copilotContent }
+                group(width: 79, label: "Copilot", labelX: 16, labelScale: 1.09) { copilotContent }
                 separator
-                group(width: 80, label: "层") { layerContent }
+                group(width: 80, label: "层", labelX: 32) { layerContent }
 
                 Spacer(minLength: 0)
             }
@@ -364,16 +364,24 @@ struct RibbonView: View {
 
     // MARK: 组容器
 
-    private func group<Content: View>(width: CGFloat, label: String,
+    private func group<Content: View>(width: CGFloat, label: String, labelX: CGFloat,
+                                      labelScale: CGFloat = 1.2,
                                       @ViewBuilder content: () -> Content) -> some View {
         VStack(spacing: 0) {
             ZStack(alignment: .topLeading) { content() }
                 .frame(width: width, height: contentHeight, alignment: .topLeading)
+            // 组名按原版绝对坐标摆位(原版是按组宽居中,但中文字宽和原版差几个像素,
+            // 居中就会整体偏;直接用绝对左缘最省事)。墨迹高 13px,y 从 199 起。
             Text(label)
-                .font(.system(size: 15.5))
+                .font(.system(size: 13.5, weight: .light))
                 .foregroundStyle(WIPaint.ink)
-                .frame(width: width, height: labelHeight, alignment: .top)
-                .padding(.top, 2)
+                // 横向拉 1.2 倍补偿字体差:原版微软雅黑的汉字墨迹 15px 宽,
+                // macOS 的苹方只有 12.5px,字高却是对上的(13px)
+                .scaleEffect(x: labelScale, y: 1, anchor: .leading)
+                .fixedSize()
+                .frame(width: width, height: labelHeight, alignment: .topLeading)
+                .padding(.top, 3)
+                .offset(x: labelX)
         }
     }
 
@@ -544,8 +552,9 @@ struct RibbonView: View {
 
     private var layerContent: some View {
         ZStack(alignment: .topLeading) {
-            WIIconView(icon: .layers, size: 26)
-                .offset(x: 27, y: 43)
+            // 原版是「三层堆叠、中间一层是蓝的」字形,手绘路径画不出来,直接抠原版像素
+            WIBitmapIcon(name: "group_layers")
+                .offset(x: 22, y: 38)
                 .onTapGesture { model.controller.showsLayerPanel.toggle() }
                 .help("图层")
         }

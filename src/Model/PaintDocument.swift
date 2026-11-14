@@ -1,5 +1,6 @@
 import CoreGraphics
 import Foundation
+import ImageIO
 import Observation
 
 /// 画作文档。持有图层栈、尺寸、历史。
@@ -67,7 +68,33 @@ final class PaintDocument {
     /// 标记画面已变化
     func markDirty() {
         compositeCache = nil
+        encodedSizeCache = nil
         renderVersion &+= 1
+    }
+
+    // MARK: - 编码体积
+
+    /// PNG 编码后的字节数。状态栏「大小」显示的就是它 ——
+    /// Windows 画图给的是图片文件本身的体积(原版截图里 1200×630 的照片显示 118.2KB),
+    /// 不是裸位图的 1200×630×4 = 3.02MB。
+    private var encodedSizeCache: Int?
+
+    func encodedByteSize() -> Int {
+        if let cached = encodedSizeCache { return cached }
+        let bytes = Self.pngByteSize(of: composite())
+        encodedSizeCache = bytes
+        return bytes
+    }
+
+    /// 把 CGImage 编成 PNG,返回字节数。
+    static func pngByteSize(of image: CGImage?) -> Int {
+        guard let image else { return 0 }
+        let data = NSMutableData()
+        guard let dest = CGImageDestinationCreateWithData(
+            data, "public.png" as CFString, 1, nil) else { return 0 }
+        CGImageDestinationAddImage(dest, image, nil)
+        guard CGImageDestinationFinalize(dest) else { return 0 }
+        return data.length
     }
 
     var selectedLayer: PaintLayer? {
@@ -249,6 +276,7 @@ final class PaintDocument {
         selectedLayerIndex = 0
         history.clear()
         compositeCache = nil
+        encodedSizeCache = nil
         renderVersion &+= 1
         isDirty = false
     }
@@ -263,6 +291,7 @@ final class PaintDocument {
         selectedLayerIndex = 0
         history.clear()
         compositeCache = nil
+        encodedSizeCache = nil
         renderVersion &+= 1
         documentTitle = title
         isDirty = false
