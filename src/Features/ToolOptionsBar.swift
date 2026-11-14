@@ -3,42 +3,55 @@ import SwiftUI
 
 /// 画布左缘浮着的两枚竖向滑块卡片(Windows 画图原版就是浮在画布上的,不是旁边一列)。
 ///
-/// 左卡 = 笔迹(笔刷粗细),顶部是四道笔刷纹理斜线,滑块默认落在底部(笔刷最细)。
-/// 右卡 = 油漆桶(不透明度),顶部是桶图标,滑块拉满,轨道整条是蓝的。
+/// 左卡 = 笔刷粗细(顶部是笔刷纹理),右卡 = 不透明度(顶部是油漆桶)。
 ///
-/// **几何全部按原版截图的绝对像素写死**(原版卡片 48×442,白底 #F8F8F8,
-/// 轨道相对卡片左边偏 10px,滑块中心行程比可见轨道短)。
+/// **几何全部按原版截图逐像素量出来**(不是估的):
+///   卡片外框 50×450 —— 卡片 1 占 x 16..65,卡片 2 占 x 76..125,顶边 y=356
+///   卡片是 1px 边线(235,235,235)+ 48px 白底(248~250),**原版没有投影**
+///   竖轨 x 39..43 / 99..103(5px 宽),纵向 407..789
+///   把手:白盘 ⌀25 + 蓝芯 ⌀13,圆心行程 y 418..770
+///   灰槽 = 竖轨的上段(把手顶边以上),蓝填充 = 下段(把手底边以下)
+///
+/// 「笔刷最细」时把手落到 770,灰槽占满 407..757,只剩轨道最底下 6px 是蓝的;
+/// 「不透明度 100%」时把手升到 418,灰槽为空,整条轨道都是蓝的 —— 两个状态都和原版对得上。
 struct ToolOptionsFloat: View {
     @Bindable var controller: CanvasController
 
-    // MARK: 卡片内几何(全部相对卡片左上角,单位 pt)
+    // MARK: 卡片内几何(相对卡片外框左上角,单位 pt)
 
-    private let cardWidth: CGFloat = 48
-    private let cardHeight: CGFloat = 444
-    /// 图标区高度(图标框 + 上边距)
-    private let iconBlockH: CGFloat = 33
-    /// 可见轨道:顶 / 底(相对卡片顶)
-    private let trackTopRel: CGFloat = 26
-    private let trackBottomRel: CGFloat = 403
-    /// 滑块圆心:最高 / 最低(相对卡片顶)。两端都比轨道内缩 —— 原版把手的行程比
-    /// 轨道短,滑块拉满/拉到底时轨道两头各露出一小截。
-    private let knobTopRel: CGFloat = 65
-    private let knobBottomRel: CGFloat = 408
-    private let knobSize: CGFloat = 22
-    /// 轨道 / 图标相对卡片中心的左偏量(原版轨道不在正中)
-    private let trackShiftX: CGFloat = 0
-    private let iconShiftX: CGFloat = -6.5
+    /// 卡片外框尺寸(原版:50×450,含 1px 边线)
+    private let cardW: CGFloat = 50
+    private let cardH: CGFloat = 450
+    /// 竖轨左边(相对卡片外框左边):绝对 39 / 99,外框左边 16 / 76 → 23
+    private let trackX: CGFloat = 23
+    private let trackW: CGFloat = 5
+    /// 竖轨顶 / 底(相对外框顶 356):绝对 407 / 789
+    private let trackTop: CGFloat = 51
+    private let trackBottom: CGFloat = 433
+    /// 把手圆心行程(相对外框顶):最低 414(绝对 770)、最高 62(绝对 418)
+    private let knobLow: CGFloat = 414
+    private let knobHigh: CGFloat = 62
+    /// 把手:白盘半径 / 蓝芯半径
+    private let thumbR: CGFloat = 12.5
+    private let dotR: CGFloat = 6.5
+    /// 竖轨颜色:原版灰槽 (137,137,137)
+    private let grooveGray = Color(white: 0.537)
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            card(icon: .brushStroke, fraction: sizeFraction) { newValue in
+        // 容器原点在画布区 (16, 356);卡片 1 就在原点,卡片 2 右移 60px
+        ZStack(alignment: .topLeading) {
+            card(icon: "brush_texture", iconOffset: CGSize(width: 12, height: 16),
+                 value: sizeFraction) { newValue in
                 controller.brush.size = 1 + CGFloat(newValue) * 24
             }
-            card(icon: .drop, fraction: opacityFraction) { newValue in
+
+            card(icon: "brush_drop", iconOffset: CGSize(width: 13, height: 13),
+                 value: opacityFraction) { newValue in
                 controller.brush.opacity = newValue
             }
+            .offset(x: 60, y: 0)
         }
-        .frame(width: cardWidth * 2 + 12, height: cardHeight)
+        .frame(width: 110, height: 450, alignment: .topLeading)
     }
 
     // MARK: 派生值
@@ -56,82 +69,60 @@ struct ToolOptionsFloat: View {
 
     // MARK: 卡片
 
-    private func card(icon: WIIcon, fraction: Double,
+    private func card(icon: String, iconOffset: CGSize, value: Double,
                       onChange: @escaping (Double) -> Void) -> some View {
-        VStack(spacing: 0) {
-            WIIconView(icon: icon, size: 25)
-                .frame(width: iconSizeBox, height: 25)
-                .offset(x: iconShiftX, y: 10)
-                .frame(width: cardWidth)
-                .frame(height: iconBlockH, alignment: .top)
+        // 把手圆心 y(相对外框顶)
+        let knobY = knobLow - value * (knobLow - knobHigh)
+        // 灰槽:轨道上段,到把手顶边为止
+        let grayH = max(knobY - thumbR - trackTop, 0)
+        // 蓝填充:从把手底边到轨道底
+        let blueH = max(trackBottom - (knobY + thumbR), 0)
 
-            GeometryReader { geo in
-                // 换算到 GeometryReader 内部坐标
-                let trackTop = trackTopRel - iconBlockH
-                let trackBottom = trackBottomRel - iconBlockH
-                let usable = max(trackBottom - trackTop, 1)
-                let knobTop = knobTopRel - iconBlockH
-                let knobBottom = knobBottomRel - iconBlockH
-                let knobY = knobTop + (1 - fraction) * (knobBottom - knobTop)
-                let trackX = (geo.size.width - 5) / 2 + trackShiftX
-                // 蓝色已填充段:从滑块圆心一直到轨道底(略多出把手半径)
-                // 蓝色是「已填充比例」:从轨道底往上长,和滑块位置解耦。
-                // 原版左卡(笔刷最小)整条是灰的,右卡(不透明度 100%)整条是蓝的。
-                let blueHeight = max(usable * fraction, 0)
-                let blueTop = trackBottom - blueHeight
+        return ZStack(alignment: .topLeading) {
+            Rectangle()
+                .fill(grooveGray)
+                .frame(width: trackW, height: grayH)
+                .offset(x: trackX, y: trackTop)
 
-                ZStack(alignment: .topLeading) {
-                    // 灰轨
-                    RoundedRectangle(cornerRadius: 2)
-                        .fill(Color(white: 0.541))
-                        .frame(width: 5, height: usable)
-                        .offset(x: trackX, y: trackTop)
+            Rectangle()
+                .fill(WIPaint.accent)
+                .frame(width: trackW, height: blueH)
+                .offset(x: trackX, y: knobY + thumbR)
 
-                    // 蓝色已填充段
-                    RoundedRectangle(cornerRadius: 2)
-                        .fill(WIPaint.accent)
-                        .frame(width: 5, height: blueHeight)
-                        .offset(x: trackX, y: blueTop)
-
-                    // 滑块把手:白底圆 + 蓝芯
-                    Circle()
-                        .fill(Color(white: 0.97))
-                        .frame(width: knobSize, height: knobSize)
-                        .overlay(
-                            Circle().strokeBorder(Color.black.opacity(0.12), lineWidth: 1)
-                        )
-                        .overlay(
-                            Circle()
-                                .fill(fraction > 0.02 ? WIPaint.accent : Color(white: 0.72))
-                                .frame(width: knobSize * 0.52, height: knobSize * 0.52)
-                        )
-                        .offset(x: (geo.size.width - knobSize) / 2 + trackShiftX,
-                                y: knobY - knobSize / 2)
-                }
-                .contentShape(Rectangle())
-                .gesture(
-                    DragGesture(minimumDistance: 0)
-                        .onChanged { value in
-                            let local = value.location.y - knobTop
-                            let f = min(max(1 - local / max(knobBottom - knobTop, 1), 0), 1)
-                            onChange(f)
-                        }
+            // 把手:白盘(带一圈浅灰描边)+ 蓝芯
+            Circle()
+                .fill(Color.white)
+                .frame(width: thumbR * 2, height: thumbR * 2)
+                .overlay(
+                    Circle().strokeBorder(Color.black.opacity(0.10), lineWidth: 1)
                 )
-            }
-            .frame(width: cardWidth, height: cardHeight - iconBlockH)
+                .overlay(
+                    Circle()
+                        .fill(WIPaint.accent)
+                        .frame(width: dotR * 2, height: dotR * 2)
+                )
+                .offset(x: trackX + trackW / 2 - thumbR, y: knobY - thumbR)
+
+            WIBitmapIcon(name: icon)
+                .offset(x: iconOffset.width, y: iconOffset.height)
         }
-        .frame(width: cardWidth, height: cardHeight)
+        .frame(width: cardW, height: cardH, alignment: .topLeading)
         .background(
             RoundedRectangle(cornerRadius: 8)
                 .fill(Color(white: 0.9725))
-                .shadow(color: .black.opacity(0.22), radius: 6, x: 1, y: 2)
         )
         .overlay(
+            // 原版卡片只有一圈 1px 边线(235,235,235),没有投影
             RoundedRectangle(cornerRadius: 8)
-                .strokeBorder(Color.black.opacity(0.08), lineWidth: 1)
+                .strokeBorder(Color(white: 0.9216), lineWidth: 1)
+        )
+        .contentShape(Rectangle())
+        .gesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { g in
+                    let v = min(max((knobLow - g.location.y) / (knobLow - knobHigh), 0), 1)
+                    onChange(v)
+                }
         )
     }
-
-    /// 图标框宽度(比卡片窄一点,再靠左偏)
-    private var iconSizeBox: CGFloat { cardWidth }
 }

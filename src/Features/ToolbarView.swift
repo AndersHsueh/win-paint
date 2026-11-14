@@ -15,14 +15,14 @@ struct TitleBarRow: View {
             WIBitmapIcon(name: "title_palette")
                 .offset(x: 8, y: 7)
 
-            Text(title)
-                // 原版是 Segoe UI 12pt @125% DPI = 15px 字身。
-                // macOS 没有 Segoe UI,用系统字体的 14.5pt regular 对齐:
-                //   拉丁部分墨迹宽 232px(原版 228)、" - 画图" 43px(原版 43)
-                //   x-height 7.7px(原版 8)、基线 y=23
-                .font(.system(size: 14.25, weight: .regular))
+            Text(ScriptSplit.make(title,
+                             latin: WIFont.titleFace().latin,
+                             cjk: WIFont.titleFace().cjk))
+                // 原版标题是 Segoe UI Semilight(拉丁)+ 微软雅黑(中文)。
+                // macOS 上没有 Segoe UI,拉丁用系统的 light 顶(墨量更接近),
+                // 中文保持 regular —— 混排按字种分段套字重,见 ScriptSplit。
                 .foregroundStyle(WIPaint.ink)
-                .offset(x: 36, y: 10)
+                .offset(x: 36, y: WIFont.titleFace().yOffset)
                 .allowsHitTesting(false)
 
             WindowButtonStrip()
@@ -227,7 +227,7 @@ struct MenuBarRow: View {
             // 宽度甚至能被 fixedSize 收到 0),19pt 的汉字会被裁掉。所以 label 只放
             // 一份**透明**文字占位(保留固有尺寸),真正可见的文字另放在 background 层。
             Text("文件")
-                .font(.system(size: 19))
+                .font(.system(size: 19, weight: .light))
                 .foregroundStyle(.clear)
                 .frame(width: 48, height: 26)
         }
@@ -256,7 +256,7 @@ struct MenuBarRow: View {
             // 宽度甚至能被 fixedSize 收到 0),19pt 的汉字会被裁掉。所以 label 只放
             // 一份**透明**文字占位(保留固有尺寸),真正可见的文字另放在 background 层。
             Text("编辑")
-                .font(.system(size: 19))
+                .font(.system(size: 19, weight: .light))
                 .foregroundStyle(.clear)
                 .frame(width: 48, height: 26)
         }
@@ -302,7 +302,7 @@ struct MenuBarRow: View {
             // 宽度甚至能被 fixedSize 收到 0),19pt 的汉字会被裁掉。所以 label 只放
             // 一份**透明**文字占位(保留固有尺寸),真正可见的文字另放在 background 层。
             Text("查看")
-                .font(.system(size: 19))
+                .font(.system(size: 19, weight: .light))
                 .foregroundStyle(.clear)
                 .frame(width: 48, height: 26)
         }
@@ -365,7 +365,7 @@ struct RibbonView: View {
     // MARK: 组容器
 
     private func group<Content: View>(width: CGFloat, label: String, labelX: CGFloat,
-                                      labelScale: CGFloat = 1.2,
+                                      labelScale: CGFloat = 1.1,
                                       @ViewBuilder content: () -> Content) -> some View {
         VStack(spacing: 0) {
             ZStack(alignment: .topLeading) { content() }
@@ -373,10 +373,12 @@ struct RibbonView: View {
             // 组名按原版绝对坐标摆位(原版是按组宽居中,但中文字宽和原版差几个像素,
             // 居中就会整体偏;直接用绝对左缘最省事)。墨迹高 13px,y 从 199 起。
             Text(label)
-                .font(.system(size: 13.5, weight: .light))
+                // 原版组名用微软雅黑,笔画比苹方细:14.5pt ultraLight 的墨迹
+                // 宽 30px / 高 14px,和原版(x 21..50 / y 199..211)对得上,
+                // 墨量 172(原版 172,之前 13.5pt light 是 213,偏粗)
+                .font(.system(size: 14.5, weight: .ultraLight))
                 .foregroundStyle(WIPaint.ink)
-                // 横向拉 1.2 倍补偿字体差:原版微软雅黑的汉字墨迹 15px 宽,
-                // macOS 的苹方只有 12.5px,字高却是对上的(13px)
+                // 横向拉 1.1 倍补偿字体差:苹方的汉字比微软雅黑窄约 10%
                 .scaleEffect(x: labelScale, y: 1, anchor: .leading)
                 .fixedSize()
                 .frame(width: width, height: labelHeight, alignment: .topLeading)

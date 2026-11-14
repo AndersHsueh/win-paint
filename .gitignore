@@ -18,6 +18,10 @@ dist/
 *.zip
 *.pkg
 
+# Python
+__pycache__/
+*.pyc
+
 # Xcode 用户数据
 xcuserdata/
 *.xcuserstate

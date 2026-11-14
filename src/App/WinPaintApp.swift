@@ -245,8 +245,8 @@ struct ContentView: View {
 
                 if model.controller.showsToolOptions {
                     ToolOptionsFloat(controller: model.controller)
-                        .padding(.leading, 17)
-                        .padding(.top, 131)
+                        .padding(.leading, 16)
+                        .padding(.top, 130)
                 }
 
                 if model.controller.showsLayerPanel {
