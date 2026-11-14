@@ -130,7 +130,12 @@ func fontFromFile(path: String, size: CGFloat) -> NSFont? {
     guard let provider = CGDataProvider(data: data) else { return nil }
     let descs = CTFontManagerCreateFontDescriptorsFromData(data) as? [CTFontDescriptor] ?? []
     _ = provider
-    guard let d = descs.first else { return nil }
+    guard var d = descs.first else { return nil }
+    // 关键:从 Data 造出来的 descriptor 不带 URL,NSFont(descriptor:) 会静默退回系统字体。
+    // 必须把 URL 补回去,否则测出来的其实是系统字体(分数和 sys 一模一样就是征兆)。
+    if let url = URL(fileURLWithPath: path) as CFURL? {
+        d = CTFontDescriptorCreateCopyWithAttributes(d, [kCTFontURLAttribute: url] as CFDictionary)
+    }
     return NSFont(descriptor: d, size: size)
 }
 

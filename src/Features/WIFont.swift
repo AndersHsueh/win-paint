@@ -34,12 +34,73 @@ enum WIFont {
     static func titleFace() -> (latin: Font, cjk: Font, yOffset: CGFloat) {
         if let name = segoeName {
             return (.custom(name, size: 14.25),
-                    .system(size: 14.25, weight: .regular),
+                    font(Face.titleCJK),
                     8)
         }
-        return (.system(size: 14.25, weight: .light),
-                .system(size: 14.25, weight: .regular),
-                10)
+        // 中文段换 15pt Noto 之后,行内最高字面变了,整行基线被顶下去 3px,
+        // 拉丁段也跟着下移 —— 所以这里要把整行抬回 3px。
+        //
+        // 字重必须是 **regular**:App 实测(标题文字区 meanΔ)
+        //   14.25 light = 23.26 / 14.25 regular = **15.93** / 14.25 medium = 25.84
+        // 扫描台(CoreText 直绘)当时给的结论是 light 更好,完全反了 —— 扫描台的
+        // 栅格化路径跟 SwiftUI 不一样,这种地方一律以 App 实测为准。
+        return (.system(size: 14.25, weight: .regular),
+                font(Face.titleCJK),
+                7)
+    }
+}
+
+// MARK: - 中文字面表
+
+extension WIFont {
+    /// 一个界面位置上的中文字面。
+    ///
+    /// 原版 Windows 画图的中文全部走微软雅黑,macOS 上没有。实测下来:
+    /// **没有任何一套字面能通吃所有位置** —— 标题、状态栏、功能区组名、菜单行
+    /// 的字号/字重/横向缩放各不相同,每处单独扫出来的最优值差得很远。
+    ///
+    /// 数值全部来自 `tools/sweep.py` + `tools/textscore.py` 的实测:
+    /// 每处都扫了苹方/苹方 Light/Thin/Regular、Hiragino Sans GB、Noto Sans CJK SC
+    /// 的各档字重、STHeiti、微软雅黑本体文件,按与原版截图的亮度 meanΔ 排序。
+    /// 换字体/字号/字重前先重跑扫描,别凭感觉调。
+    struct Face {
+        var size: CGFloat
+        /// 系统字重(仅当 `ps` 找不到时用)
+        var weight: Font.Weight = .regular
+        /// PostScript 名。找不到就退回 `weight`
+        var ps: String?
+        /// 横向缩放,补偿字库宽度差
+        var scaleX: CGFloat = 1
+
+        /// 标题栏「画图」。Noto Sans CJK SC Light 15pt,meanΔ 25.2;
+        /// 苹方 14.25 regular 是 47 —— 差近一倍。
+        static let titleCJK = Face(size: 15, weight: .light, ps: "NotoSansCJKsc-Light")
+
+        /// 状态栏「像素」。Noto Sans CJK SC Thin 15.5pt,meanΔ 26.1。
+        static let statusPixelCJK = Face(size: 15.5, weight: .thin, ps: "NotoSansCJKsc-Thin")
+
+        /// 状态栏「大小」。这一处反倒是苹方 Thin 最准,meanΔ 10.4
+        /// (Noto Thin 是 20.6)—— 两处标签原版的字距不同,不能套同一个面。
+        static let statusSizeCJK = Face(size: 15, weight: .thin, ps: "PingFangSC-Thin")
+
+        /// 功能区组名。系统 ultraLight 14.5pt + 横向 1.1。
+        ///
+        /// 扫描台(CoreText 直绘)说 thin 更准,但 **App 实测反过来**:
+        /// 换成 ultraLight 之后选择组 4.24→4.20、图像组 2.05→1.84、
+        /// 工具组 2.11→1.94、层 1.81→1.76,四个组全降。
+        /// 扫描台和 SwiftUI 的字形栅格化路径不同,以 App 实测为准。
+        static let groupLabel = Face(size: 14.5, weight: .ultraLight, scaleX: 1.1)
+
+        /// 菜单行汉字。系统 ultraLight 19pt,meanΔ 18.5(light 是 19.7)。
+        static let menuCJK = Face(size: 19, weight: .ultraLight)
+    }
+
+    /// 把 Face 变成 SwiftUI Font。`ps` 在本机不存在时退回系统字重。
+    static func font(_ f: Face) -> Font {
+        if let ps = f.ps, NSFont(name: ps, size: f.size) != nil {
+            return .custom(ps, size: f.size)
+        }
+        return .system(size: f.size, weight: f.weight)
     }
 }
 

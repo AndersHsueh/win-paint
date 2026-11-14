@@ -373,13 +373,14 @@ struct RibbonView: View {
             // 组名按原版绝对坐标摆位(原版是按组宽居中,但中文字宽和原版差几个像素,
             // 居中就会整体偏;直接用绝对左缘最省事)。墨迹高 13px,y 从 199 起。
             Text(label)
-                // 原版组名用微软雅黑,笔画比苹方细:14.5pt ultraLight 的墨迹
-                // 宽 30px / 高 14px,和原版(x 21..50 / y 199..211)对得上,
-                // 墨量 172(原版 172,之前 13.5pt light 是 213,偏粗)
-                .font(.system(size: 14.5, weight: .ultraLight))
+                // 组名字面逐处实测:汉字用系统 Thin 15pt + 横向 1.05(meanΔ 10.8);
+                // 拉丁(Copilot)沿用原来的 14.5pt ultraLight。
+                .font(label.unicodeScalars.allSatisfy { $0.isASCII } ? .system(size: 14.5, weight: .ultraLight)
+                                    : WIFont.font(WIFont.Face.groupLabel))
                 .foregroundStyle(WIPaint.ink)
-                // 横向拉 1.1 倍补偿字体差:苹方的汉字比微软雅黑窄约 10%
-                .scaleEffect(x: labelScale, y: 1, anchor: .leading)
+                // 横向拉一点补偿字体差:汉字字宽比原版的微软雅黑窄几个百分点
+                .scaleEffect(x: label.unicodeScalars.allSatisfy { $0.isASCII } ? labelScale : WIFont.Face.groupLabel.scaleX,
+                             y: 1, anchor: .leading)
                 .fixedSize()
                 .frame(width: width, height: labelHeight, alignment: .topLeading)
                 .padding(.top, 3)
@@ -479,8 +480,13 @@ struct RibbonView: View {
 
     private var brushContent: some View {
         ZStack(alignment: .topLeading) {
-            RoundedRectangle(cornerRadius: 4)
-                .strokeBorder(WIPaint.accent, lineWidth: 1.5)
+            // 原版的选中框是 **1px** 蓝边 + 圆角 5:
+            // 实测左边框 x=456 是纯 (0,103,192),x=457 已经是纯白内芯;
+            // 之前用 1.5px,渲染成 1px 实 + 1px 半透明,内芯就被污染了。
+            // 圆角也是量出来的:原版顶边那行只有 29 个蓝像素(宽 39),
+            // 圆角 3 会画出 35 个 —— 39 - 2r = 29 反推 r = 5。
+            RoundedRectangle(cornerRadius: 5)
+                .strokeBorder(WIPaint.accent, lineWidth: 1)
                 .frame(width: 39, height: 59)
                 .offset(x: 15, y: 26)
             // 原版这个按钮是分体的:画笔和 ▾ 之间有一条分隔线
@@ -541,12 +547,15 @@ struct RibbonView: View {
 
     private var copilotContent: some View {
         ZStack(alignment: .topLeading) {
-            CopilotGlyph()
-                .frame(width: 30, height: 30)
-                .offset(x: 25, y: 34)
+            // 原版徽标是 30×28 的多色渐变缎带(中间镂空)。
+            // 手描路径画不出那种圆润的色带边界,实测整块糊成方块,
+            // 直接抠原版像素当位图贴回(Resources/icons/copilot_badge.png)。
+            WIBitmapIcon(name: "copilot_badge")
+                .offset(x: 22, y: 30)
                 .help("Copilot(不实现)")
+            // ▾ 比原版低 1px(原版墨迹 160..163)
             WIIconView(icon: .chevronDown, size: 12)
-                .offset(x: 34, y: 67)
+                .offset(x: 34, y: 66)
         }
     }
 
@@ -738,139 +747,5 @@ struct ThicknessGlyph: View {
             drop.closeSubpath()
             ctx.stroke(drop, with: .color(grey), lineWidth: 1.4)
         }
-    }
-}
-
-/// Copilot 徽标。
-///
-/// 轮廓是照原版截图(1484×985)里的徽标逐像素描出来的:
-/// 30×28,一条折起来的缎带 —— 屋顶横带 + 左侧竖板 + 右侧竖板 + 底部甩出去的尾巴,
-/// 中间是镂空的。色板也按原版采样:
-/// 屋顶蓝 → 左腿青绿/绿/黄 → 尾巴橙/红 → 右腿紫/品红/粉。
-struct CopilotGlyph: View {
-    var body: some View {
-        ZStack {
-            // 底层:整条缎带的竖向渐变
-            silhouette
-                .fill(LinearGradient(stops: [
-                    .init(color: Self.rgb(18, 152, 235), location: 0.00),
-                    .init(color: Self.rgb(38, 168, 205), location: 0.28),
-                    .init(color: Self.rgb(66, 172, 137), location: 0.36),
-                    .init(color: Self.rgb(122, 184, 86), location: 0.46),
-                    .init(color: Self.rgb(206, 194, 30), location: 0.61),
-                    .init(color: Self.rgb(247, 198, 5), location: 0.68),
-                    .init(color: Self.rgb(254, 164, 96), location: 0.75),
-                    .init(color: Self.rgb(221, 67, 60), location: 0.86),
-                    .init(color: Self.rgb(252, 212, 164), location: 0.96)
-                ], startPoint: .top, endPoint: .bottom))
-
-            // 上层:右半边叠紫 → 品红 → 粉,用横向遮罩淡入
-            silhouette
-                .fill(LinearGradient(stops: [
-                    .init(color: Self.rgb(32, 86, 208), location: 0.00),
-                    .init(color: Self.rgb(60, 92, 214), location: 0.18),
-                    .init(color: Self.rgb(178, 81, 211), location: 0.36),
-                    .init(color: Self.rgb(203, 82, 181), location: 0.50),
-                    .init(color: Self.rgb(241, 91, 137), location: 0.68),
-                    .init(color: Self.rgb(247, 129, 112), location: 0.78)
-                ], startPoint: .top, endPoint: .bottom))
-                .mask(LinearGradient(stops: [
-                    .init(color: .clear, location: 0.00),
-                    .init(color: .clear, location: 0.50),
-                    .init(color: .white, location: 0.80),
-                    .init(color: .white, location: 1.00)
-                ], startPoint: .leading, endPoint: .trailing))
-        }
-    }
-
-    private static func rgb(_ r: Int, _ g: Int, _ b: Int) -> Color {
-        Color(red: Double(r) / 255, green: Double(g) / 255, blue: Double(b) / 255)
-    }
-
-    /// 描出来的轮廓(30×30 网格,外形 + 镂空的孔)
-    private var silhouette: Path {
-        var p = Path()
-        p.move(to: CGPoint(x: 6, y: 0))
-        p.addLine(to: CGPoint(x: 20, y: 0))
-        p.addLine(to: CGPoint(x: 20, y: 1))
-        p.addLine(to: CGPoint(x: 22, y: 1))
-        p.addLine(to: CGPoint(x: 22, y: 3))
-        p.addLine(to: CGPoint(x: 23, y: 3))
-        p.addLine(to: CGPoint(x: 23, y: 6))
-        p.addLine(to: CGPoint(x: 24, y: 6))
-        p.addLine(to: CGPoint(x: 24, y: 7))
-        p.addLine(to: CGPoint(x: 26, y: 7))
-        p.addLine(to: CGPoint(x: 26, y: 8))
-        p.addLine(to: CGPoint(x: 29, y: 8))
-        p.addLine(to: CGPoint(x: 29, y: 9))
-        p.addLine(to: CGPoint(x: 30, y: 9))
-        p.addLine(to: CGPoint(x: 30, y: 17))
-        p.addLine(to: CGPoint(x: 29, y: 17))
-        p.addLine(to: CGPoint(x: 29, y: 20))
-        p.addLine(to: CGPoint(x: 28, y: 20))
-        p.addLine(to: CGPoint(x: 28, y: 23))
-        p.addLine(to: CGPoint(x: 27, y: 23))
-        p.addLine(to: CGPoint(x: 27, y: 25))
-        p.addLine(to: CGPoint(x: 26, y: 25))
-        p.addLine(to: CGPoint(x: 26, y: 26))
-        p.addLine(to: CGPoint(x: 25, y: 26))
-        p.addLine(to: CGPoint(x: 25, y: 27))
-        p.addLine(to: CGPoint(x: 24, y: 27))
-        p.addLine(to: CGPoint(x: 24, y: 28))
-        p.addLine(to: CGPoint(x: 10, y: 28))
-        p.addLine(to: CGPoint(x: 10, y: 27))
-        p.addLine(to: CGPoint(x: 9, y: 27))
-        p.addLine(to: CGPoint(x: 9, y: 26))
-        p.addLine(to: CGPoint(x: 8, y: 26))
-        p.addLine(to: CGPoint(x: 8, y: 23))
-        p.addLine(to: CGPoint(x: 7, y: 23))
-        p.addLine(to: CGPoint(x: 7, y: 21))
-        p.addLine(to: CGPoint(x: 5, y: 21))
-        p.addLine(to: CGPoint(x: 5, y: 20))
-        p.addLine(to: CGPoint(x: 1, y: 20))
-        p.addLine(to: CGPoint(x: 1, y: 19))
-        p.addLine(to: CGPoint(x: 0, y: 19))
-        p.addLine(to: CGPoint(x: 0, y: 11))
-        p.addLine(to: CGPoint(x: 1, y: 11))
-        p.addLine(to: CGPoint(x: 1, y: 8))
-        p.addLine(to: CGPoint(x: 2, y: 8))
-        p.addLine(to: CGPoint(x: 2, y: 5))
-        p.addLine(to: CGPoint(x: 3, y: 5))
-        p.addLine(to: CGPoint(x: 3, y: 3))
-        p.addLine(to: CGPoint(x: 4, y: 3))
-        p.addLine(to: CGPoint(x: 4, y: 2))
-        p.addLine(to: CGPoint(x: 5, y: 2))
-        p.addLine(to: CGPoint(x: 5, y: 1))
-        p.addLine(to: CGPoint(x: 6, y: 1))
-        p.closeSubpath()
-
-        // 中间的孔(逆时针 —— 非零环绕规则下形成镂空)
-        p.move(to: CGPoint(x: 17, y: 8))
-        p.addLine(to: CGPoint(x: 16, y: 8))
-        p.addLine(to: CGPoint(x: 16, y: 9))
-        p.addLine(to: CGPoint(x: 15, y: 9))
-        p.addLine(to: CGPoint(x: 15, y: 10))
-        p.addLine(to: CGPoint(x: 14, y: 10))
-        p.addLine(to: CGPoint(x: 14, y: 12))
-        p.addLine(to: CGPoint(x: 13, y: 12))
-        p.addLine(to: CGPoint(x: 13, y: 16))
-        p.addLine(to: CGPoint(x: 12, y: 16))
-        p.addLine(to: CGPoint(x: 12, y: 19))
-        p.addLine(to: CGPoint(x: 11, y: 19))
-        p.addLine(to: CGPoint(x: 11, y: 20))
-        p.addLine(to: CGPoint(x: 14, y: 20))
-        p.addLine(to: CGPoint(x: 14, y: 19))
-        p.addLine(to: CGPoint(x: 15, y: 19))
-        p.addLine(to: CGPoint(x: 15, y: 18))
-        p.addLine(to: CGPoint(x: 16, y: 18))
-        p.addLine(to: CGPoint(x: 16, y: 16))
-        p.addLine(to: CGPoint(x: 17, y: 16))
-        p.addLine(to: CGPoint(x: 17, y: 12))
-        p.addLine(to: CGPoint(x: 18, y: 12))
-        p.addLine(to: CGPoint(x: 18, y: 10))
-        p.addLine(to: CGPoint(x: 19, y: 10))
-        p.addLine(to: CGPoint(x: 19, y: 8))
-        p.closeSubpath()
-        return p
     }
 }

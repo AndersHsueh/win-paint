@@ -27,9 +27,9 @@ struct ColorGroupView: View {
 
     var body: some View {
         ZStack(alignment: .topLeading) {
-            // 主色槽:黑盘(28)+ 蓝色高亮环(39)
+            // 主色槽:黑盘(29.12)+ 蓝色高亮环(40)
             primaryWell
-                .offset(x: 14.5, y: 12)
+                .offset(x: 14.05, y: 11.1)
 
             // 副色槽:白盘 + 灰环
             secondaryWell
@@ -39,15 +39,13 @@ struct ColorGroupView: View {
             ForEach(0..<20, id: \.self) { i in
                 let row = i / 10
                 let col = i % 10
-                swatch(Self.palette[i])
+                swatch(Self.palette[i], row: row, col: col)
                     .offset(x: 70 + CGFloat(col) * 30, y: 15 + CGFloat(row) * 30)
             }
 
             // 一行 10 个空自定义色位
             ForEach(0..<10, id: \.self) { col in
-                Circle()
-                    .strokeBorder(Color.black.opacity(0.375), lineWidth: 1)
-                    .frame(width: 20, height: 20)
+                WIPaletteTile(name: "slot-c\(col)")
                     .offset(x: 70 + CGFloat(col) * 30, y: 75)
             }
 
@@ -77,19 +75,30 @@ struct ColorGroupView: View {
         }
     }
 
-    /// 主色槽。黑色圆盘(30) + **细**蓝色高亮环(40,线宽 1.6),
-    /// 原版的蓝环很细,环和黑盘之间还留着一圈白色间隙(实测蓝环 832..871、黑盘 837..866)。
+    /// 主色槽。黑色圆盘 + 蓝色高亮环。
+    ///
+    /// 全部参数都是对原版截图做**逐像素反解**出来的(别凭感觉调):
+    /// - 槽心在 (852.0, 120.5)。原版黑盘在 y=120 那一行的覆盖率剖面是
+    ///   `x=837 56% | x=838..865 100% | x=866 56%` —— 硬边圆,半径 14.56,
+    ///   所以 frame = 29.12(不是 29.1,差 0.5px 会让边缘像素整体错半格)。
+    /// - 蓝环是一条宽 1.32 的细环,半径区间 [18.68, 20.0],环芯色 **(13,111,194)**。
+    ///   `strokeBorder` 是向内收缩的,所以外沿 = frame/2 → frame 取 40.0、
+    ///   lineWidth 取 1.32,环带正好落在 [18.68, 20.0]。
+    /// - 原版黑盘在**竖直方向**比水平方向多一圈柔灰晕(竖直 r=15 处还有 31% 灰),
+    ///   水平方向则是硬边。这个各向异性还没复刻,见 wiki。
     private var primaryWell: some View {
         ZStack {
             Circle()
                 .fill(controller.primaryColor.color)
-                .frame(width: 30, height: 30)
-                .overlay(
-                    Circle().strokeBorder(WIPaint.accent, lineWidth: 1.2)
-                        .frame(width: 40, height: 40)
-                )
+                .frame(width: 29.12, height: 29.12)
+                .offset(x: 0.5)
+            Circle()
+                .strokeBorder(Color(red: 13.0 / 255.0, green: 111.0 / 255.0,
+                                    blue: 194.0 / 255.0),
+                              lineWidth: 1.32)
+                .frame(width: 40.0, height: 40.0)
         }
-        .frame(width: 40, height: 40)
+        .frame(width: 41.0, height: 41.0)
         .contentShape(Circle())
         .onTapGesture { showingPicker = true }
         .help("主色(点击选择)")
@@ -113,40 +122,75 @@ struct ColorGroupView: View {
 
     /// 色块。原版每个色块外面都有一圈 2px 的边。
     ///
-    /// **描边色不是「本色压暗」** —— 逐像素反推 8 个色块的边缘像素,拟合出的规则是:
-    /// `边缘像素 = 本色 × 0.23 + 中性灰 140 × 0.77`
-    /// (红 (237,28,36)→(162,114,114)、绿 (34,177,76)→(116,147,124)、黄 (255,242,0)→(166,162,106)
-    /// 三组独立样本用同一组系数都能命中,所以按公式直接算描边色。
-    /// 描边色 = 本色 × 0.23 + 中性灰 140 × 0.77(逐像素拟合原版边缘得出的规则)
-    private static func edgeColor(of c: RGBA) -> Color {
-        let gray = 140.0 / 255.0
-        return Color(red: c.r * 0.23 + gray * 0.77,
-                     green: c.g * 0.23 + gray * 0.77,
-                     blue: c.b * 0.23 + gray * 0.77)
+    /// 现在色块整体是抠出来的位图(见 `WIPaletteTile`),下面这套解析规则留作档案:
+    /// 原版色块是**三层同心圆** —— 本体(半径 8)→ 本体×0.89(半径 9)→
+    /// 描边色(半径 10)。0.89 是逐像素实测的,8 种颜色全对:
+    /// 红 (237,28,36)→(211,25,32)、橙 (255,127,39)→(227,113,35)、
+    /// 黄 (255,242,0)→(227,215,0)、绿 (34,177,76)→(30,158,68)、
+    /// 天蓝 (0,162,232)→(0,144,207)、白 (255,255,255)→(227,227,227)。
+    /// 描边色 = 本色 × 0.23 + 中性灰 140 × 0.77
+    /// (红 (237,28,36)→(162,114,114)、绿 (34,177,76)→(116,147,124)、
+    ///  黄 (255,242,0)→(166,162,106))—— 但 45° 对角线上原版是 (160,73,76),
+    /// 公式给不出,所以整块抠成位图。
+
+    private func swatch(_ color: RGBA, row: Int, col: Int) -> some View {
+        WIPaletteTile(name: "swatch-r\(row)c\(col)")
+            .contentShape(Circle())
+            .onTapGesture { controller.primaryColor = color }
+            .contextMenu {
+                Button("设为副色") { controller.secondaryColor = color }
+                Button("复制颜色值") {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(color.hexString, forType: .string)
+                }
+            }
+            .help(color.hexString)
+    }
+}
+
+/// 色板图块(20×20)。
+///
+/// 原版色块的边缘在 45° 对角线上是 (160,73,76) 这种「更暗更饱和」的暗红,
+/// 正上/正右方向却是 (162,116,117) 的中性灰边 —— 这是原图缩放/锐化留下的
+/// 通道相关残留(纯色 (237,28,36) 不可能混出 R=160),任何解析公式都复刻不出来。
+/// 所以直接抠成位图,由 `tools/extract-palette.py` 从原版截图生成,
+/// 和 Resources/colorwheel.png、Resources/icons/copilot_badge.png 同一套路。
+///
+/// 抠取规则:纯 Mica 底色的像素 alpha=0(运行时用 App 自己的底色透出来),
+/// 其余像素原样拷贝。位图按 1:1 显示(`interpolation(.none)`),不做任何缩放。
+struct WIPaletteTile: View {
+    let name: String
+
+    private static var cache: [String: NSImage] = [:]
+
+    static func image(_ name: String) -> NSImage? {
+        if let cached = Self.cache[name] { return cached }
+        var img: NSImage?
+        if let url = Bundle.main.url(forResource: name, withExtension: "png", subdirectory: "palette") {
+            img = NSImage(contentsOf: url)
+        }
+        if img == nil {
+            let repoRoot = URL(fileURLWithPath: #filePath)
+                .deletingLastPathComponent()   // src/Features
+                .deletingLastPathComponent()   // src
+                .deletingLastPathComponent()   // 仓库根
+            img = NSImage(contentsOf: repoRoot.appendingPathComponent("Resources/palette/\(name).png"))
+        }
+        if let img { Self.cache[name] = img }
+        return img
     }
 
-    private func swatch(_ color: RGBA) -> some View {
-        ZStack {
-            // 外圈:中性灰 140 掺 23% 本色(实测灰块 195 → 边缘 152、黑块 0 → 边缘 108)
-            Circle()
-                .fill(Self.edgeColor(of: color))
-                .frame(width: 20, height: 20)
-
-            // 内芯:本体(原版本体 18px,外侧留 1px 描边)
-            Circle()
-                .fill(color.color)
-                .frame(width: 18, height: 18)
-        }
-        .contentShape(Circle())
-        .onTapGesture { controller.primaryColor = color }
-        .contextMenu {
-            Button("设为副色") { controller.secondaryColor = color }
-            Button("复制颜色值") {
-                NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(color.hexString, forType: .string)
+    var body: some View {
+        Group {
+            if let img = Self.image(name) {
+                Image(nsImage: img)
+                    .resizable()
+                    .interpolation(.none)
+                    .frame(width: img.size.width, height: img.size.height)
+            } else {
+                Color.clear.frame(width: 20, height: 20)
             }
         }
-        .help(color.hexString)
     }
 }
 

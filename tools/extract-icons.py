@@ -89,6 +89,15 @@ TITLE_REGIONS = {
     "title_palette":  (8, 7, 32, 31),
 }
 
+# ── Copilot 徽标(多色渐变缎带 + 镂空) ─────────────────────────────────────
+# 手描路径画不出原版那种圆润的渐变缎带(实测色带边界差 1px、整体糊成块状),
+# 这块整块不透明拷贝最稳:矩形内的背景 Mica 与复刻版差 0.79(肉眼不可见),
+# 而徽标本体直接变成逐像素一致。
+OPAQUE_REGIONS = {
+    # 徽标彩色墨迹 1283..1312 / 123..150,外扩一圈
+    "copilot_badge":  (1280, 119, 1316, 154),
+}
+
 # 形状库网格:cell 22×22,列距 28、行距 27,左上角 cell 在 (528, 102)
 SHAPE_COLS, SHAPE_ROWS = 5, 4
 SHAPE_X0, SHAPE_Y0 = 528, 102
@@ -328,6 +337,9 @@ def main():
         reg = img[y0:y1, x0:x1]
         # 调色板聚类会把这个多色图标抠丢笔触(误差 16),色偏+EM 精修能到 2.4
         save(name, alpha_rgba_rich(reg), "色偏")
+
+    for name, (x0, y0, x1, y1) in OPAQUE_REGIONS.items():
+        save(name, alpha_rgba_opaque(img[y0:y1, x0:x1]), "实心")
 
     for j in range(SHAPE_BITMAP_ROWS):
         for i in range(SHAPE_COLS):

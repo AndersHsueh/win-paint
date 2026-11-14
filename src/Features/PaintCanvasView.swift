@@ -96,9 +96,11 @@ final class PaintCanvasView: NSView {
               bounds.width > 1, bounds.height > 1 else { return }
         ctrl.pan = CGPoint(
             x: (bounds.width - doc.size.width * ctrl.zoom) / 2,
-            // 原版画布内容在画布区里比精确居中高 2px(照片 265..894 而不是 267..896),
+            // 原版画布内容比精确居中高 2px(照片 265..894 而不是 267..896),
             // 这里照抄原版的偏移量,保证 1:1 像素对齐。
-            y: (bounds.height - doc.size.height * ctrl.zoom) / 2 + 2
+            // 实测最优是 +1.4:offset 每 +1 画布往**上**移 1px(AppKit 坐标 y 向上),
+            // +2 时画布顶边落在 264.55、比原版的 265 高了半像素。
+            y: (bounds.height - doc.size.height * ctrl.zoom) / 2 + 1.4
         )
         needsDisplay = true
     }
@@ -159,12 +161,17 @@ final class PaintCanvasView: NSView {
 
         let docRect = CGRect(origin: .zero, size: doc.size)
 
-        // 画布白底(原版没有投影,只有一条极淡的边)
+        // 画布白底(原版的画布边缘只有外面一圈投影暗线,见下)
         ctx.setFillColor(NSColor.white.cgColor)
         ctx.fill(docRect)
-        ctx.setStrokeColor(NSColor.black.withAlphaComponent(0.08).cgColor)
-        ctx.setLineWidth(1 / max(zoom, 0.01))
-        ctx.stroke(docRect)
+
+        // 画布四周的投影暗线。
+        //
+        // 原版实测(逐像素):画布内容占 x 142..1341 / y 265..894,外面还套着
+        //   上 1px (y=264) / 左 2px (x=140,141) / 右 1px (x=1342) / 下 2px (y=895,896)
+        // 亮度是底色的 95%~97%,也就是盖了一层 3%~5% 的黑。
+        // 之前只在 docRect 上描了一条 1px 8% 的边,结果只有半条、还偏亮。
+        drawCanvasShadow(in: ctx, docRect: docRect, zoom: zoom, pan: pan)
 
         // 文档内容
         if let image = doc.composite() {
@@ -188,6 +195,39 @@ final class PaintCanvasView: NSView {
         if let selection = ctrl.selectionRect {
             drawSelection(in: ctx, docRect: selection)
         }
+    }
+
+    /// 画布四周的投影暗线(原版实测:上 1px / 左 2px / 右 1px / 下 2px)
+    ///
+    /// 颜色是盖在 Mica 底色上的一层薄黑(3%~5%),所以直接用带 alpha 的黑填充,
+    /// 让 AppKit 跟底下的 Mica 做合成 —— 底色有渐变,这样才不会画成一条死色。
+    ///
+    /// ⚠️ 调用时 ctx 已经做过 `translate(pan)` + `scale(zoom)`,
+    /// 所以这里用的是**文档坐标系**:画布下边在 y=0、上边在 y=height*zoom。
+    /// 再叠一次 pan 会把暗线推到画布外面去(之前就踩过)。
+    private func drawCanvasShadow(in ctx: CGContext, docRect: CGRect, zoom: CGFloat, pan: CGPoint) {
+        let left = docRect.minX
+        let bottom = docRect.minY
+        let right = docRect.maxX * zoom
+        let top = docRect.maxY * zoom
+        let w = right - left
+        let h = top - bottom
+
+        // 每边的厚度和浓度都按原版逐像素取值
+        let edge = 1.0 / max(zoom, 0.01)
+
+        ctx.setFillColor(NSColor.black.withAlphaComponent(0.045).cgColor)
+        // 上 1px
+        ctx.fill(CGRect(x: left, y: top, width: w, height: edge))
+        // 右 1px
+        ctx.fill(CGRect(x: right, y: bottom - 2 * edge, width: edge, height: h + 3 * edge))
+        // 左 2px
+        ctx.fill(CGRect(x: left - 2 * edge, y: bottom - 2 * edge, width: 2 * edge, height: h + 4 * edge))
+        // 下 2px(离画布越远越淡)
+        ctx.setFillColor(NSColor.black.withAlphaComponent(0.030).cgColor)
+        ctx.fill(CGRect(x: left - 2 * edge, y: bottom - edge, width: w + 3 * edge, height: edge))
+        ctx.setFillColor(NSColor.black.withAlphaComponent(0.045).cgColor)
+        ctx.fill(CGRect(x: left - 2 * edge, y: bottom - 2 * edge, width: w + 3 * edge, height: edge))
     }
 
     /// 画布边框手柄:四角 + 四边中点,共 8 个 7×7 的空心方块

@@ -57,6 +57,13 @@ if [ -d "$ROOT/Resources/icons" ]; then
   echo "    已包含 icons/($(ls -1 "$ROOT/Resources/icons" | wc -l | tr -d ' ') 个)"
 fi
 
+# 色板图块(20 个颜色块 + 10 个空自定义色位,从原版截图抠出)
+if [ -d "$ROOT/Resources/palette" ]; then
+  mkdir -p "$APP/Contents/Resources/palette"
+  cp "$ROOT"/Resources/palette/*.png "$APP/Contents/Resources/palette/"
+  echo "    已包含 palette/($(ls -1 "$ROOT/Resources/palette" | wc -l | tr -d ' ') 个)"
+fi
+
 echo "==> 签名"
 if [ "${WINPAINT_ADHOC:-0}" = "1" ]; then
   codesign --force --sign - "$APP"

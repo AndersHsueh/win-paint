@@ -52,22 +52,34 @@ struct StatusBarView: View {
                 WIBitmapIcon(name: "status_size")
                     .offset(x: 344, y: 13)
 
-                Text(verbatim: "\(Int(document.size.width)) × \(Int(document.size.height))像素")
+                // 原版「1200 × 630像素」:数字走 Segoe UI,汉字走微软雅黑。
+                // macOS 没有雅黑,汉字这一段单独换字面(Noto Sans CJK SC Thin 15.5),
+                // 数字保持系统 light —— 混排用 Text + Text 拼,基线自动对齐。
+                // 数字字号 13.7:实测 14.5 会让数字变宽 2~3px,和原版对不上,
+                // 状态栏左半的 meanΔ 反而从 5.33 涨到 5.99 —— 别改。
+                (Text(verbatim: "\(Int(document.size.width)) × \(Int(document.size.height))")
                     .font(.system(size: 13.7, weight: .light))
+                 + Text(verbatim: "像素")
+                    .font(WIFont.font(WIFont.Face.statusPixelCJK))
+                    // 汉字字号比数字大,共享基线时整行被顶下去 5px,
+                    // 数字归位后汉字还高 2px,再单独压回来
+                    .baselineOffset(-2))
                     .monospacedDigit()
                     .foregroundStyle(WIPaint.ink)
-                    .offset(x: 371, y: 15)
+                    .offset(x: 371, y: 10)
 
                 hairline.offset(x: 499, y: 10)
 
                 WIBitmapIcon(name: "floppy")
                     .offset(x: 515, y: 12)
 
-                Text(verbatim: "大小: \(ByteFormat.string(encodedSize))")
-                    .font(.system(size: 13.7, weight: .light))
+                (Text(verbatim: "大小")
+                    .font(WIFont.font(WIFont.Face.statusSizeCJK))
+                 + Text(verbatim: ": \(ByteFormat.string(encodedSize))")
+                    .font(.system(size: 13.7, weight: .light)))
                     .monospacedDigit()
                     .foregroundStyle(WIPaint.ink)
-                    .offset(x: 546, y: 15)
+                    .offset(x: 546, y: 14)
             }
             .frame(width: 700, height: Self.barHeight, alignment: .topLeading)
 
@@ -149,14 +161,19 @@ struct StatusBarView: View {
             .menuIndicator(.hidden)
             .frame(width: 115, height: 32)
 
+            // 原版「100%」是 Segoe UI Semilight,笔画比 regular 细。
+            // 扫描台实测:system 14.5 ultraLight 的 meanΔ 14.3,明显优于 regular。
             Text(controller.zoomText)
-                .font(.system(size: 14, weight: .regular))
+                .font(.system(size: 14.5, weight: .ultraLight))
                 .monospacedDigit()
                 .foregroundStyle(WIPaint.ink)
                 .offset(x: 15, y: 4.5)
 
+            // ▾ 在下拉框内侧(原版墨迹 1185..1193 / 958..963)。
+            // 注意:offset 超出 ZStack 的 115pt 宽度也能画出来(SwiftUI 不裁),
+            // 但一旦算错就会飘到外面的放大镜上 —— 曾经就飘过。
             WIBitmapIcon(name: "zoom_chev")
-                .offset(x: 138, y: 17)
+                .offset(x: 83, y: 10)
         }
         .frame(width: 115, height: 32)
     }
