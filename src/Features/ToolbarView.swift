@@ -11,17 +11,22 @@ struct TitleBarRow: View {
 
     var body: some View {
         ZStack(alignment: .topLeading) {
-            WIIconView(icon: .palette, size: 20)
-                .offset(x: 10, y: 9)
+            // 调色板图标是彩色渐变,手绘路径对不上,直接抠原版像素(墨迹 10..29 / 10..28)
+            WIBitmapIcon(name: "title_palette")
+                .offset(x: 8, y: 7)
 
             Text(title)
-                .font(.system(size: 18, weight: .medium))
+                // 原版是 Segoe UI 12pt @125% DPI = 15px 字身。
+                // macOS 没有 Segoe UI,用系统字体的 14.5pt regular 对齐:
+                //   拉丁部分墨迹宽 232px(原版 228)、" - 画图" 43px(原版 43)
+                //   x-height 7.7px(原版 8)、基线 y=23
+                .font(.system(size: 14.5, weight: .regular))
                 .foregroundStyle(WIPaint.ink)
                 .offset(x: 37, y: 10)
                 .allowsHitTesting(false)
 
             WindowButtonStrip()
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
         .frame(height: 32)
         .background {
@@ -69,27 +74,33 @@ final class WindowConfigView: NSView {
 
 // MARK: 窗口按钮
 
-/// Windows 风格的 —/□/✕。原版是灰色线性图标,不是 macOS 的红绿灯。
+/// Windows 风格的 —/□/✕。原版是纯黑 1px 线性字形(— 12×1、□ 12×12、✕ 12×12),
+/// 手绘路径对不上抗锯齿,直接用从原版抠下来的位图。
 struct WindowButtonStrip: View {
     @State private var hovered: Int? = nil
 
     var body: some View {
-        HStack(spacing: 0) {
-            button(.minimize, index: 0) { WinOps.minimize() }
-            button(.maximize, index: 1) { WinOps.zoom() }
-            button(.close, index: 2) { WinOps.close() }
+        ZStack(alignment: .topLeading) {
+            // 实测墨迹:— x1330..1341/y18,□ x1388..1399/y13..24,✕ x1447..1458/y13..24
+            button("title_min", x: 1325, y: 3, index: 0) { WinOps.minimize() }
+            button("title_max", x: 1382, y: 3, index: 1) { WinOps.zoom() }
+            button("title_close", x: 1440, y: 3, index: 2) { WinOps.close() }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
-    private func button(_ glyph: WindowGlyph, index: Int, action: @escaping () -> Void) -> some View {
+    private func button(_ icon: String, x: CGFloat, y: CGFloat, index: Int,
+                        action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            glyph
-                .stroke(Color(white: 0.28), style: StrokeStyle(lineWidth: 1, lineCap: .round, lineJoin: .round))
-                .frame(width: 12, height: 12)
+            ZStack(alignment: .topLeading) {
+                Rectangle()
+                    .fill(hovered == index ? Color.black.opacity(0.06) : .clear)
+                    .frame(width: 46, height: 26)
+                WIBitmapIcon(name: icon)
+            }
         }
         .buttonStyle(.plain)
-        .frame(width: 58, height: 32)
-        .background(hovered == index ? Color.black.opacity(0.06) : .clear)
+        .offset(x: x, y: y)
         .onHover { inside in hovered = inside ? index : (hovered == index ? nil : hovered) }
     }
 }
@@ -138,16 +149,16 @@ struct MenuBarRow: View {
     var body: some View {
         ZStack(alignment: .topLeading) {
             // 左半部分:绝对坐标排版(和原版截图逐像素对齐)
-            fileMenu.offset(x: 19)
-            editMenu.offset(x: 89)
-            viewMenu.offset(x: 159)
+            fileMenu.offset(x: 18)
+            editMenu.offset(x: 88)
+            viewMenu.offset(x: 158)
 
             Rectangle().fill(WIPaint.separator)
                 .frame(width: 1, height: 26)
                 .offset(x: 214, y: 18)
 
-            WIIconView(icon: .save, size: 20)
-                .frame(width: 20, height: 20)
+            // 菜单行的保存图标和状态栏的软盘是同一个 Segoe 字形,直接复用抠下来的位图
+            WIBitmapIcon(name: "floppy")
                 .offset(x: 232, y: 20)
                 .onTapGesture { model.save() }
                 .help("保存")
@@ -156,9 +167,8 @@ struct MenuBarRow: View {
                 .frame(width: 1, height: 26)
                 .offset(x: 270, y: 18)
 
-            WIIconView(icon: .share, size: 22)
-                .frame(width: 22, height: 22)
-                .offset(x: 287, y: 18)
+            WIBitmapIcon(name: "menu_share")
+                .offset(x: 285, y: 16)
                 .onTapGesture { model.share() }
                 .help("共享")
 
@@ -166,39 +176,31 @@ struct MenuBarRow: View {
                 .frame(width: 1, height: 26)
                 .offset(x: 326, y: 18)
 
-            WIIconView(icon: .undo, size: 22)
-                .frame(width: 22, height: 22)
-                .offset(x: 345, y: 17)
-                .foregroundStyle(WIPaint.inkSoft)
+            WIBitmapIcon(name: "menu_undo")
+                .offset(x: 343, y: 15)
                 .onTapGesture { model.undo() }
                 .help("撤销")
 
-            WIIconView(icon: .redo, size: 22)
-                .frame(width: 22, height: 22)
-                .offset(x: 394, y: 17)
-                .foregroundStyle(WIPaint.inkSoft)
+            WIBitmapIcon(name: "menu_redo")
+                .offset(x: 392, y: 15)
                 .onTapGesture { model.redo() }
                 .help("重做")
 
             // 右半部分:贴右边
-            HStack(spacing: 25) {
-                WIIconView(icon: .megaphone, size: 24)
-                    .frame(width: 24, height: 24)
-                    .help("反馈")
-                WIIconView(icon: .gear, size: 24)
-                    .frame(width: 24, height: 24)
-                    .help("设置")
-            }
-            .frame(maxWidth: .infinity, alignment: .trailing)
-            .padding(.trailing, 16)
-            .offset(y: 20)
+            // 原版墨迹:喇叭 x 1403..1423 / y 54..71,齿轮 x 1449..1467 / y 53..72
+            WIBitmapIcon(name: "menu_megaphone")
+                .offset(x: 1397, y: 17)
+                .help("反馈")
+            WIBitmapIcon(name: "menu_gear")
+                .offset(x: 1444, y: 16)
+                .help("设置")
         }
         .font(.system(size: 14))
         .foregroundStyle(WIPaint.ink)
-        .frame(maxWidth: .infinity)
-        // 关键:Menu 的固有高度比 56 小,`ZStack` 会被后面的 `.frame(height: 56)`
-        // **居中**放置 → 整排绝对坐标全部下移 13px。显式指定 alignment 顶对齐,
-        // 让 ZStack 的原点严格等于菜单行顶端(绝对 y=32)。
+        // 必须是 topLeading:.frame(maxWidth:.infinity) 默认是 **居中** 对齐,
+        // ZStack 一旦没有贪婪子视图(以前右边那个 HStack 是贪婪的),
+        // 整排绝对坐标就会被居中平移 (窗口宽 - ZStack 宽) / 2。
+        .frame(maxWidth: .infinity, alignment: .topLeading)
         .frame(height: 56, alignment: .topLeading)
         .background(WIMica.horizontal(WIMica.chrome))
     }
@@ -368,7 +370,7 @@ struct RibbonView: View {
             ZStack(alignment: .topLeading) { content() }
                 .frame(width: width, height: contentHeight, alignment: .topLeading)
             Text(label)
-                .font(.system(size: 13))
+                .font(.system(size: 15.5))
                 .foregroundStyle(WIPaint.ink)
                 .frame(width: width, height: labelHeight, alignment: .top)
                 .padding(.top, 2)
@@ -388,11 +390,12 @@ struct RibbonView: View {
 
     private var selectContent: some View {
         ZStack(alignment: .topLeading) {
-            WIIconView(icon: .selectBracket, size: 30)
-                .offset(x: 21, y: 31)
+            // 原版是 28×28 的虚线方框,墨迹 x 22..49 / y 121..148
+            WIIconView(icon: .selectBracket, size: 28)
+                .offset(x: 22, y: 32)
                 .onTapGesture { model.controller.tool = .select }
-            WIIconView(icon: .chevronDown, size: 12)
-                .offset(x: 31, y: 70)
+            WIBitmapIcon(name: "select_chev")
+                .offset(x: 29, y: 71)
         }
     }
 
@@ -400,31 +403,31 @@ struct RibbonView: View {
 
     private var imageContent: some View {
         ZStack(alignment: .topLeading) {
-            WIIconView(icon: .crop, size: 24)
-                .offset(x: 23, y: 18)
+            WIBitmapIcon(name: "img_crop")
+                .offset(x: 21, y: 16)
                 .onTapGesture { model.controller.tool = .crop }
                 .help("裁剪")
 
-            WIIconView(icon: .rotate, size: 24)
-                .offset(x: 74, y: 19)
+            WIBitmapIcon(name: "img_rotate")
+                .offset(x: 72, y: 17)
                 .onTapGesture { model.handle(.rotateRight) }
                 .help("旋转")
-            WIIconView(icon: .chevronDown, size: 10)
-                .offset(x: 107, y: 26)
+            WIBitmapIcon(name: "img_chev1")
+                .offset(x: 105, y: 23)
 
-            WIIconView(icon: .removeBackground, size: 24)
-                .offset(x: 22, y: 69)
+            WIBitmapIcon(name: "img_removebg")
+                .offset(x: 20, y: 67)
                 .help("删除背景")
 
-            WIIconView(icon: .flip, size: 24)
-                .offset(x: 72, y: 68)
+            WIBitmapIcon(name: "img_flip")
+                .offset(x: 70, y: 66)
                 .onTapGesture { model.handle(.flipHorizontal) }
                 .help("翻转")
-            WIIconView(icon: .chevronDown, size: 10)
-                .offset(x: 107, y: 74)
+            WIBitmapIcon(name: "img_chev2")
+                .offset(x: 105, y: 71)
 
-            WIIconView(icon: .resize, size: 28, grid: 32)
-                .offset(x: 148, y: 42)
+            WIBitmapIcon(name: "img_resize")
+                .offset(x: 144, y: 38)
                 .onTapGesture { model.handle(.resize) }
                 .help("调整大小")
         }
@@ -434,29 +437,29 @@ struct RibbonView: View {
 
     private var toolContent: some View {
         ZStack(alignment: .topLeading) {
-            WIIconView(icon: .pencil, size: 24)
-                .offset(x: 22, y: 18)
+            WIBitmapIcon(name: "tool_pencil")
+                .offset(x: 20, y: 16)
                 .onTapGesture { model.controller.tool = .pencil }
                 .help("铅笔")
-            WIIconView(icon: .fillCan, size: 24)
-                .offset(x: 72, y: 18)
+            WIBitmapIcon(name: "tool_fillcan")
+                .offset(x: 70, y: 16)
                 .onTapGesture { model.controller.tool = .fill }
                 .help("用颜色填充")
-            WIIconView(icon: .textA, size: 24)
-                .offset(x: 124, y: 19)
+            WIBitmapIcon(name: "tool_text")
+                .offset(x: 122, y: 17)
                 .onTapGesture { model.controller.tool = .text }
                 .help("文本")
 
-            WIIconView(icon: .eraser, size: 24)
-                .offset(x: 24, y: 67)
+            WIBitmapIcon(name: "tool_eraser")
+                .offset(x: 22, y: 65)
                 .onTapGesture { model.controller.tool = .eraser }
                 .help("橡皮擦")
-            WIIconView(icon: .eyedropper, size: 24)
-                .offset(x: 72, y: 69)
+            WIBitmapIcon(name: "tool_dropper")
+                .offset(x: 70, y: 67)
                 .onTapGesture { model.controller.tool = .eyedropper }
                 .help("取色器")
-            WIIconView(icon: .magnifier, size: 24)
-                .offset(x: 122, y: 69)
+            WIBitmapIcon(name: "tool_magnifier")
+                .offset(x: 120, y: 67)
                 .onTapGesture { model.controller.tool = .magnifier }
                 .help("放大镜")
         }
@@ -468,19 +471,19 @@ struct RibbonView: View {
         ZStack(alignment: .topLeading) {
             RoundedRectangle(cornerRadius: 4)
                 .strokeBorder(WIPaint.accent, lineWidth: 1.5)
-                .frame(width: 37, height: 58)
-                .offset(x: 15, y: 27)
+                .frame(width: 39, height: 59)
+                .offset(x: 15, y: 26)
             // 原版这个按钮是分体的:画笔和 ▾ 之间有一条分隔线
             Rectangle()
                 .fill(Color.black.opacity(0.18))
                 .frame(width: 35, height: 1)
                 .offset(x: 16, y: 63)
-            WIIconView(icon: .brush, size: 26)
-                .offset(x: 20, y: 32)
+            WIBitmapIcon(name: "brush_paint")
+                .offset(x: 17, y: 28)
                 .onTapGesture { model.controller.tool = .brush }
                 .help("画笔")
-            WIIconView(icon: .chevronDown, size: 12)
-                .offset(x: 28, y: 68)
+            WIBitmapIcon(name: "brush_chev")
+                .offset(x: 25, y: 65)
         }
     }
 
@@ -489,33 +492,30 @@ struct RibbonView: View {
     private var shapeContent: some View {
         ZStack(alignment: .topLeading) {
             ShapeGalleryBox(controller: model.controller)
-                .offset(x: 11, y: 10)
+                .offset(x: 15, y: 6)
 
             // 轮廓样式(左上):圆角方块 + 一支斜插进来的笔
-            OutlineStyleGlyph()
-                .frame(width: 24, height: 24)
-                .offset(x: 191, y: 23)
+            WIBitmapIcon(name: "shape_outline")
+                .offset(x: 188, y: 20)
                 .onTapGesture { model.controller.tool = .shape }
                 .help("轮廓样式")
-            WIIconView(icon: .chevronDown, size: 10)
-                .offset(x: 225, y: 27)
+            WIBitmapIcon(name: "shape_chev1")
+                .offset(x: 222, y: 24)
 
             // 填充样式(右):圆角方块 + 波纹
-            FillStyleGlyph()
-                .frame(width: 30, height: 30)
-                .offset(x: 257, y: 37)
+            WIBitmapIcon(name: "shape_fill")
+                .offset(x: 254, y: 34)
                 .help("填充样式")
 
             // 油漆桶(左下)
-            ThicknessGlyph()
-                .frame(width: 22, height: 22)
-                .offset(x: 191, y: 70)
+            WIBitmapIcon(name: "shape_thick")
+                .offset(x: 188, y: 67)
                 .help("填充方式")
-            WIIconView(icon: .chevronDown, size: 10)
-                .offset(x: 225, y: 76)
+            WIBitmapIcon(name: "shape_chev2")
+                .offset(x: 222, y: 73)
 
-            WIIconView(icon: .chevronDown, size: 10)
-                .offset(x: 268, y: 76)
+            WIBitmapIcon(name: "shape_chev3")
+                .offset(x: 265, y: 73)
         }
     }
 
@@ -555,49 +555,71 @@ struct RibbonView: View {
 // MARK: - 形状库
 
 /// 形状库:只有一圈很淡的边框,内部和功能区同色(原版并没有白底!)
-/// 原版实测:边框 523..681 / 95..193,右侧滚动条在 x 672..676
+///
+/// 原版实测:面板 x 521..682 / y 95..194(162×100),滚动条 x 674..676 / y 116..150。
+/// 网格 cell 22×22,列距 28、行距 27,左上角 cell 在 (528, 102)——这些是抠位图的基准。
 struct ShapeGalleryBox: View {
     @Bindable var controller: CanvasController
 
     private let columns = Array(repeating: GridItem(.fixed(22), spacing: 6), count: 5)
-    private let rows = Array(repeating: GridItem(.fixed(22), spacing: 7), count: 4)
+    private let rows = Array(repeating: GridItem(.fixed(22), spacing: 5), count: 4)
+
+    /// 原版截图里前三行是完整的,第四行被面板底边裁掉一截(只剩星星尖)。
+    /// 前三行用抠下来的位图保证逐像素一致;第四行原版本来就缺,继续用矢量画,
+    /// 这样往下滚动时还能看到完整图形。
+    private static let bitmapCount = 15
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
-            LazyVGrid(columns: columns, spacing: 7) {
-                ForEach(ShapeKind.allCases) { kind in
-                    WIShapeIconView(icon: kind.galleryIcon, size: 20)
-                        .foregroundStyle(controller.shapeKind == kind ? WIPaint.accent : WIPaint.ink)
-                        // 原版只有「形状」工具激活时才高亮当前形状;默认是铅笔工具,不显示高亮
-                        .background(
-                            RoundedRectangle(cornerRadius: 2)
-                                .fill(controller.tool == .shape && controller.shapeKind == kind
-                                      ? WIPaint.accent.opacity(0.15) : .clear)
-                        )
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            controller.shapeKind = kind
-                            controller.tool = .shape
-                        }
-                        .help(kind.displayName)
+            LazyVGrid(columns: columns, spacing: 5) {
+                ForEach(Array(ShapeKind.allCases.enumerated()), id: \.element) { index, kind in
+                    cell(index: index, kind: kind)
                 }
             }
-            .padding(.horizontal, 6)
-            .padding(.top, 4)
+            .padding(.leading, 6)
+            .padding(.top, 7)
+            .padding(.trailing, 20)
         }
-        .frame(width: 158, height: 98)
-        .overlay(alignment: .trailing) {
+        .frame(width: 162, height: 100)
+        .overlay(alignment: .topTrailing) {
             // 原版右侧那根细滚动条
-            RoundedRectangle(cornerRadius: 1)
+            RoundedRectangle(cornerRadius: 1.5)
                 .fill(Color.black.opacity(0.22))
-                .frame(width: 3, height: 38)
-                .padding(.trailing, 4)
-                .padding(.top, 18)
+                .frame(width: 3, height: 35)
+                .padding(.trailing, 6)
+                .padding(.top, 21)
         }
         .overlay(
             RoundedRectangle(cornerRadius: 3)
                 .strokeBorder(Color.black.opacity(0.06), lineWidth: 1)
         )
+    }
+
+    @ViewBuilder
+    private func cell(index: Int, kind: ShapeKind) -> some View {
+        Group {
+            if index < Self.bitmapCount {
+                WIBitmapIcon(name: String(format: "shape_%02d", index))
+            } else {
+                // 第四行原版被面板底边裁掉一截,这里用矢量画(往下滚还能看到完整图形),
+                // 但起始位置要下移 3px,让默认状态下露出的那一截和原版对齐。
+                WIShapeIconView(icon: kind.galleryIcon, size: 20)
+                    .offset(y: 3)
+            }
+        }
+        .foregroundStyle(controller.shapeKind == kind ? WIPaint.accent : WIPaint.ink)
+        // 原版只有「形状」工具激活时才高亮当前形状;默认是铅笔工具,不显示高亮
+        .background(
+            RoundedRectangle(cornerRadius: 2)
+                .fill(controller.tool == .shape && controller.shapeKind == kind
+                      ? WIPaint.accent.opacity(0.15) : .clear)
+        )
+        .contentShape(Rectangle())
+        .onTapGesture {
+            controller.shapeKind = kind
+            controller.tool = .shape
+        }
+        .help(kind.displayName)
     }
 }
 

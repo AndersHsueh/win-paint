@@ -13,6 +13,12 @@ final class AppModel {
 
     init() {
         let doc = PaintDocument(size: CGSize(width: 1200, height: 630))
+        // 开发快照模式:允许指定文档名。原版截图打开的是一张真实文件,
+        // 标题栏是「pragmata-capcom-spotlight-social - 画图」;用同一个名字起快照,
+        // 标题栏的文字排版才能和原版逐像素比对(默认的「无标题」字形完全不同,没法比)。
+        if let name = ProcessInfo.processInfo.environment["WINPAINT_SNAPSHOT_TITLE"] {
+            doc.documentTitle = name
+        }
         let ctrl = CanvasController()
         ctrl.document = doc
         self.document = doc
@@ -255,6 +261,8 @@ struct ContentView: View {
 
             if model.controller.showsStatusBar {
                 // 行界横线(原版在 y=937)+ 状态栏 938..983
+                // 底部留 1px 空行:原版最底下一行是 Win11 的 DWM 窗口阴影,
+                // 去掉这行分隔线就会整体上移 1px,状态栏里所有图标全部错位。
                 VStack(spacing: 0) {
                     WIDividerLine()
                     StatusBarView(
@@ -264,6 +272,7 @@ struct ContentView: View {
                         onZoom: { model.controller.setZoom($0) }
                     )
                 }
+                .padding(.bottom, 1)
             }
         }
         .frame(minWidth: 1180, minHeight: 760)

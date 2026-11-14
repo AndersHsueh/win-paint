@@ -50,6 +50,13 @@ if [ -f "$ROOT/Resources/colorwheel.png" ]; then
   echo "    已包含 colorwheel.png"
 fi
 
+# 从原版抠出来的 UI 图标(状态栏 4 个 / 形状库 15 个 / 窗口按钮 3 个)
+if [ -d "$ROOT/Resources/icons" ]; then
+  mkdir -p "$APP/Contents/Resources/icons"
+  cp "$ROOT"/Resources/icons/*.png "$APP/Contents/Resources/icons/"
+  echo "    已包含 icons/($(ls -1 "$ROOT/Resources/icons" | wc -l | tr -d ' ') 个)"
+fi
+
 echo "==> 签名"
 if [ "${WINPAINT_ADHOC:-0}" = "1" ]; then
   codesign --force --sign - "$APP"

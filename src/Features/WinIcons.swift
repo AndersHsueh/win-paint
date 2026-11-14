@@ -246,13 +246,13 @@ enum WIIconRenderer {
         curve.move(to: CGPoint(x: 20.5, y: 21.5))
         curve.addCurve(to: CGPoint(x: 4.6, y: 10),
                        control1: CGPoint(x: 15, y: 13.5), control2: CGPoint(x: 8.5, y: 10))
-        stroke(&ctx, curve, WIPaint.inkSoft, 1.6)
+        stroke(&ctx, curve, WIPaint.iconGrey, 1.6)
         var head = Path()
         head.move(to: CGPoint(x: 1, y: 9.8))
         head.addLine(to: CGPoint(x: 6.8, y: 5.6))
         head.addLine(to: CGPoint(x: 6.4, y: 12.6))
         head.closeSubpath()
-        fill(&ctx, head, WIPaint.inkSoft)
+        fill(&ctx, head, WIPaint.iconGrey)
     }
 
     /// 重做:撤销的镜像
@@ -261,13 +261,13 @@ enum WIIconRenderer {
         curve.move(to: CGPoint(x: 3.5, y: 21.5))
         curve.addCurve(to: CGPoint(x: 19.4, y: 10),
                        control1: CGPoint(x: 9, y: 13.5), control2: CGPoint(x: 15.5, y: 10))
-        stroke(&ctx, curve, WIPaint.inkSoft, 1.6)
+        stroke(&ctx, curve, WIPaint.iconGrey, 1.6)
         var head = Path()
         head.move(to: CGPoint(x: 23, y: 9.8))
         head.addLine(to: CGPoint(x: 17.2, y: 5.6))
         head.addLine(to: CGPoint(x: 17.6, y: 12.6))
         head.closeSubpath()
-        fill(&ctx, head, WIPaint.inkSoft)
+        fill(&ctx, head, WIPaint.iconGrey)
     }
 
     /// 保存:软盘
@@ -824,11 +824,11 @@ enum WIIconRenderer {
         brackets.move(to: CGPoint(x: 8.4, y: 21.4))
         brackets.addLine(to: CGPoint(x: 2.6, y: 21.4))
         brackets.addLine(to: CGPoint(x: 2.6, y: 15.6))
-        stroke(&ctx, brackets, WIPaint.inkSoft, 1.4)
+        stroke(&ctx, brackets, WIPaint.ink, 1.4)
 
         var circle = Path()
         circle.addEllipse(in: CGRect(x: 8.2, y: 8.2, width: 7.6, height: 7.6))
-        stroke(&ctx, circle, WIPaint.inkSoft, 1.4)
+        stroke(&ctx, circle, WIPaint.ink, 1.4)
     }
 
     /// 缩放放大镜(带 + / −)
@@ -852,11 +852,12 @@ enum WIIconRenderer {
 
     /// 下拉箭头
     static func chevronDown(_ ctx: inout GraphicsContext) {
+        // 原版小箭头是个固定的 ▾:实测 9px 宽 / 4~5px 高,笔画偏灰(最暗 89)。
         var p = Path()
-        p.move(to: CGPoint(x: 4.4, y: 9.2))
-        p.addLine(to: CGPoint(x: 12, y: 16.4))
-        p.addLine(to: CGPoint(x: 19.6, y: 9.2))
-        stroke(&ctx, p, WIPaint.inkSoft, 1.6)
+        p.move(to: CGPoint(x: 3.2, y: 9.0))
+        p.addLine(to: CGPoint(x: 12, y: 16.8))
+        p.addLine(to: CGPoint(x: 20.8, y: 9.0))
+        stroke(&ctx, p, Color(white: 0.30), 1.9)
     }
 
     /// 选择:虚线方框(状态栏用的小号)
@@ -869,32 +870,16 @@ enum WIIconRenderer {
     /// 选择(功能区):四角实心角标 + 四边虚线
     /// 原版实测:方框 22..51 / 120..149,四角是实心 L 形角标
     static func selectBracket(_ ctx: inout GraphicsContext) {
-        let lo: CGFloat = 1.0, hi: CGFloat = 23.0, arm: CGFloat = 5.5
-
-        var corners = Path()
-        corners.move(to: CGPoint(x: lo, y: lo + arm))
-        corners.addLine(to: CGPoint(x: lo, y: lo))
-        corners.addLine(to: CGPoint(x: lo + arm, y: lo))
-
-        corners.move(to: CGPoint(x: hi - arm, y: lo))
-        corners.addLine(to: CGPoint(x: hi, y: lo))
-        corners.addLine(to: CGPoint(x: hi, y: lo + arm))
-
-        corners.move(to: CGPoint(x: hi, y: hi - arm))
-        corners.addLine(to: CGPoint(x: hi, y: hi))
-        corners.addLine(to: CGPoint(x: hi - arm, y: hi))
-
-        corners.move(to: CGPoint(x: lo + arm, y: hi))
-        corners.addLine(to: CGPoint(x: lo, y: hi))
-        corners.addLine(to: CGPoint(x: lo, y: hi - arm))
-        stroke(&ctx, corners, WIPaint.ink, 1.5)
-
-        var edges = Path()
-        edges.move(to: CGPoint(x: lo + arm, y: lo)); edges.addLine(to: CGPoint(x: hi - arm, y: lo))
-        edges.move(to: CGPoint(x: hi, y: lo + arm)); edges.addLine(to: CGPoint(x: hi, y: hi - arm))
-        edges.move(to: CGPoint(x: hi - arm, y: hi)); edges.addLine(to: CGPoint(x: lo + arm, y: hi))
-        edges.move(to: CGPoint(x: lo, y: hi - arm)); edges.addLine(to: CGPoint(x: lo, y: lo + arm))
-        dashed(&ctx, edges, WIPaint.ink, 1.5, [2.8, 2.4])
+        // 原版就是**一个 28×28 的虚线方框**(不是「角括号 + 虚线边」)。
+        // 实测原版墨迹 x 22..49 / y 121..148,四角也是虚线,最暗像素 82(灰)。
+        var p = Path()
+        p.move(to: CGPoint(x: 1, y: 1))
+        p.addLine(to: CGPoint(x: 23, y: 1))
+        p.addLine(to: CGPoint(x: 23, y: 23))
+        p.addLine(to: CGPoint(x: 1, y: 23))
+        p.closeSubpath()
+        // 虚线节奏:实测 5.5 实 / 2 空(周长 112px,周期 7.5px)
+        dashed(&ctx, p, Color(white: 0.32), 1.3, [4.4, 1.6])
     }
 
     /// 笔迹:三道手写波浪(左侧浮动滑块顶部那个图标)

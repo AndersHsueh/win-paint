@@ -17,9 +17,12 @@ struct ColorGroupView: View {
         RGBA(1, 0.498, 0.153), RGBA(1, 0.949, 0), RGBA(0.133, 0.694, 0.298), RGBA(0, 0.635, 0.910),
         RGBA(0.247, 0.282, 0.800), RGBA(0.639, 0.286, 0.643),
         // 第 2 行
-        RGBA(1, 1, 1), RGBA(0.737, 0.737, 0.737), RGBA(0.698, 0.463, 0.329), RGBA(0.965, 0.659, 0.761),
-        RGBA(0.965, 0.761, 0.055), RGBA(0.906, 0.863, 0.667), RGBA(0.686, 0.871, 0.110), RGBA(0.580, 0.820, 0.886),
-        RGBA(0.424, 0.553, 0.718), RGBA(0.757, 0.722, 0.875),
+        // 第二行是原版浅色行,数值逐格取自截图:
+        // 白 / 灰25% (195,195,195) / 棕 (185,122,87) / 玫瑰 (255,174,201) / 金 (255,201,14)
+        // 浅黄 (239,228,176) / 柠檬绿 (181,230,29) / 浅青 (153,217,234) / 蓝灰 (112,146,190) / 薰衣草 (200,191,231)
+        RGBA(1, 1, 1), RGBA(0.765, 0.765, 0.765), RGBA(0.725, 0.478, 0.341), RGBA(1, 0.682, 0.788),
+        RGBA(1, 0.788, 0.055), RGBA(0.937, 0.894, 0.690), RGBA(0.710, 0.902, 0.114), RGBA(0.600, 0.851, 0.918),
+        RGBA(0.439, 0.573, 0.745), RGBA(0.784, 0.749, 0.906),
     ]
 
     var body: some View {
@@ -43,7 +46,7 @@ struct ColorGroupView: View {
             // 一行 10 个空自定义色位
             ForEach(0..<10, id: \.self) { col in
                 Circle()
-                    .strokeBorder(Color.black.opacity(0.33), lineWidth: 1)
+                    .strokeBorder(Color.black.opacity(0.375), lineWidth: 1)
                     .frame(width: 20, height: 20)
                     .offset(x: 70 + CGFloat(col) * 30, y: 75)
             }
@@ -74,15 +77,16 @@ struct ColorGroupView: View {
         }
     }
 
-    /// 主色槽。黑色圆盘(28) + 蓝色高亮环(39),原版就是这两层
+    /// 主色槽。黑色圆盘(30) + **细**蓝色高亮环(40,线宽 1.6),
+    /// 原版的蓝环很细,环和黑盘之间还留着一圈白色间隙(实测蓝环 832..871、黑盘 837..866)。
     private var primaryWell: some View {
         ZStack {
             Circle()
                 .fill(controller.primaryColor.color)
-                .frame(width: 28, height: 28)
+                .frame(width: 30, height: 30)
                 .overlay(
-                    Circle().strokeBorder(WIPaint.accent, lineWidth: 2.2)
-                        .frame(width: 39, height: 39)
+                    Circle().strokeBorder(WIPaint.accent, lineWidth: 1.2)
+                        .frame(width: 40, height: 40)
                 )
         }
         .frame(width: 40, height: 40)
@@ -107,19 +111,31 @@ struct ColorGroupView: View {
             .help("副色(点击与主色互换)")
     }
 
-    /// 色块。原版每个色块外面都有一圈 2px 的深色边(实测 = 本色 × 0.87),
-    /// 白块那圈尤其明显,不然白底上就看不见了。
+    /// 色块。原版每个色块外面都有一圈 2px 的边。
+    ///
+    /// **描边色不是「本色压暗」** —— 逐像素反推 8 个色块的边缘像素,拟合出的规则是:
+    /// `边缘像素 = 本色 × 0.23 + 中性灰 140 × 0.77`
+    /// (红 (237,28,36)→(162,114,114)、绿 (34,177,76)→(116,147,124)、黄 (255,242,0)→(166,162,106)
+    /// 三组独立样本用同一组系数都能命中,所以按公式直接算描边色。
+    /// 描边色 = 本色 × 0.23 + 中性灰 140 × 0.77(逐像素拟合原版边缘得出的规则)
+    private static func edgeColor(of c: RGBA) -> Color {
+        let gray = 140.0 / 255.0
+        return Color(red: c.r * 0.23 + gray * 0.77,
+                     green: c.g * 0.23 + gray * 0.77,
+                     blue: c.b * 0.23 + gray * 0.77)
+    }
+
     private func swatch(_ color: RGBA) -> some View {
         ZStack {
-            // 外圈:本色压暗 13%
+            // 外圈:中性灰 140 掺 23% 本色(实测灰块 195 → 边缘 152、黑块 0 → 边缘 108)
             Circle()
-                .fill(RGBA(color.r * 0.87, color.g * 0.87, color.b * 0.87, color.a).color)
+                .fill(Self.edgeColor(of: color))
                 .frame(width: 20, height: 20)
 
-            // 内芯:本色
+            // 内芯:本体(原版本体 18px,外侧留 1px 描边)
             Circle()
                 .fill(color.color)
-                .frame(width: 16, height: 16)
+                .frame(width: 18, height: 18)
         }
         .contentShape(Circle())
         .onTapGesture { controller.primaryColor = color }
