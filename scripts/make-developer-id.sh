@@ -17,32 +17,37 @@ set -euo pipefail
 TEAM_ID="${TEAM_ID:-BP6XLRFH4K}"
 CN="${CN:-Anders Hsueh}"
 EMAIL="${EMAIL:-xue.anders.yh@gmail.com}"
-COUNTRY="${COUNTRY:-US}"
+COUNTRY="${COUNTRY:-CN}"
+STATE="${STATE:-Guangdong}"
+CITY="${CITY:-Shenzhen}"
 
 OUT_DIR="${1:-$HOME/Desktop/WinPaint-DID}"
 KEY="$OUT_DIR/WinPaint-DID.key"
 CSR="$OUT_DIR/WinPaint-DID.csr"
 
+# Apple 对 Developer ID 的 CSR 要求这些字段齐全:
+# CN / O / OU(=团队 ID)/ C / ST / L / emailAddress
+# 少 ST、L 的话门户会直接判 CSR 无效,得重跑一轮。
+SUBJ="/C=${COUNTRY}/ST=${STATE}/L=${CITY}/O=${CN}/OU=${TEAM_ID}/CN=${CN}/emailAddress=${EMAIL}"
+
 mkdir -p "$OUT_DIR"
 chmod 700 "$OUT_DIR"
 
 if [[ -f "$KEY" ]]; then
-  echo "私钥已存在，复用：$KEY"
+  echo "私钥已存在,复用:$KEY"
 else
   echo "==> 生成 RSA 2048 私钥"
   openssl req -new -newkey rsa:2048 -nodes \
     -keyout "$KEY" \
     -out "$CSR" \
-    -subj "/CN=${CN}/OU=${TEAM_ID}/O=${CN}/emailAddress=${EMAIL}/C=${COUNTRY}" \
+    -subj "$SUBJ" \
     2>/dev/null
   chmod 600 "$KEY"
 fi
 
 if [[ ! -f "$CSR" ]]; then
-  # 私钥在但 CSR 不在（被删了），用私钥重签一份
-  openssl req -new -key "$KEY" -out "$CSR" \
-    -subj "/CN=${CN}/OU=${TEAM_ID}/O=${CN}/emailAddress=${EMAIL}/C=${COUNTRY}" \
-    2>/dev/null
+  # 私钥在但 CSR 不在(被删了),用私钥重签一份
+  openssl req -new -key "$KEY" -out "$CSR" -subj "$SUBJ" 2>/dev/null
 fi
 
 echo
