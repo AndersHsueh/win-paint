@@ -70,7 +70,10 @@ final class CanvasController {
 
     /// 以视口中心为锚设置缩放
     func setZoom(_ value: CGFloat) {
-        let clamped = min(max(value, 0.05), 32)
+        // 上限必须和滑块能表示的范围一致(ZoomSlider 是 0.05~8,也就是 800%)。
+        // 以前这里夹到 32,「放大」按钮点几下就能到 3200%,但滑块只能画到 800% ——
+        // 百分比文字和滑块对不上。
+        let clamped = min(max(value, 0.05), 8)
         guard zoom > 0 else { zoom = clamped; return }
         let center = CGPoint(x: viewportSize.width / 2, y: viewportSize.height / 2)
         let docPoint = CGPoint(x: (center.x - pan.x) / zoom, y: (center.y - pan.y) / zoom)

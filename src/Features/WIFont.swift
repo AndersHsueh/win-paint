@@ -15,7 +15,6 @@ enum WIFont {
     /// 找 Segoe UI(标准字体目录里装了就找得到)。返回 PostScript 名或 nil。
     static var segoeName: String? {
         if let cached = cachedName { return cached }
-        registerBundledSegoe()
         for n in ["Segoe UI Semilight", "Segoe UI", "Segoe UI Light"] {
             if NSFont(name: n, size: 14) != nil {
                 cachedName = n
@@ -25,17 +24,6 @@ enum WIFont {
         cachedName = nil
         return nil
     }
-    /// 进程级注册「Windows App」自带的 Segoe UI —— 只在进程内生效,不落盘、不进仓库。
-    private static func registerBundledSegoe() {
-        let dir = "/Applications/Windows App.app/Contents/Resources"
-        for f in ["segoeuisl.ttf", "segoeui.ttf", "segoeuil.ttf"] {
-            let p = dir + "/" + f
-            guard FileManager.default.fileExists(atPath: p) else { continue }
-            var err: Unmanaged<CFError>?
-            CTFontManagerRegisterFontsForURL(URL(fileURLWithPath: p) as CFURL, .process, &err)
-        }
-    }
-
     private static var cachedName: String?
     /// 标题栏用的字体 + 竖向微调。
     ///
@@ -97,12 +85,11 @@ extension WIFont {
         /// (Noto Thin 是 20.6)—— 两处标签原版的字距不同,不能套同一个面。
         static let statusSizeCJK = Face(size: 15, weight: .thin, ps: "PingFangSC-Thin")
 
-        /// 功能区组名。系统 ultraLight 14.5pt + 横向 1.1。
+        /// 功能区组名。系统 thin 14.5pt + 横向 1.1。
         ///
-        /// 扫描台(CoreText 直绘)说 thin 更准,但 **App 实测反过来**:
-        /// 换成 ultraLight 之后选择组 4.24→4.20、图像组 2.05→1.84、
-        /// 工具组 2.11→1.94、层 1.81→1.76,四个组全降。
-        /// 扫描台和 SwiftUI 的字形栅格化路径不同,以 App 实测为准。
+        /// 逐组微调过位置之后(见 ToolbarView 的 labelDX/labelDY),
+        /// App 实测 ultraLight 4.97 / thin 4.95 / light 5.45 —— thin 略优,
+        /// 而且和原版那点笔画粗细更接近。
         static let groupLabel = Face(size: 14.5, weight: .thin, scaleX: 1.1)
 
         /// 菜单行汉字。系统 ultraLight 19pt,meanΔ 18.5(light 是 19.7)。
