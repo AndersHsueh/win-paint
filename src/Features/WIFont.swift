@@ -15,6 +15,7 @@ enum WIFont {
     /// 找 Segoe UI(标准字体目录里装了就找得到)。返回 PostScript 名或 nil。
     static var segoeName: String? {
         if let cached = cachedName { return cached }
+        registerBundledSegoe()
         for n in ["Segoe UI Semilight", "Segoe UI", "Segoe UI Light"] {
             if NSFont(name: n, size: 14) != nil {
                 cachedName = n
@@ -24,8 +25,18 @@ enum WIFont {
         cachedName = nil
         return nil
     }
-    private static var cachedName: String?
+    /// 进程级注册「Windows App」自带的 Segoe UI —— 只在进程内生效,不落盘、不进仓库。
+    private static func registerBundledSegoe() {
+        let dir = "/Applications/Windows App.app/Contents/Resources"
+        for f in ["segoeuisl.ttf", "segoeui.ttf", "segoeuil.ttf"] {
+            let p = dir + "/" + f
+            guard FileManager.default.fileExists(atPath: p) else { continue }
+            var err: Unmanaged<CFError>?
+            CTFontManagerRegisterFontsForURL(URL(fileURLWithPath: p) as CFURL, .process, &err)
+        }
+    }
 
+    private static var cachedName: String?
     /// 标题栏用的字体 + 竖向微调。
     ///
     /// 原版标题:拉丁是 Segoe UI Semilight(墨量 919 px),中文是实心黑(231 px)。
@@ -72,12 +83,15 @@ extension WIFont {
         /// 横向缩放,补偿字库宽度差
         var scaleX: CGFloat = 1
 
-        /// 标题栏「画图」。Noto Sans CJK SC Light 15pt,meanΔ 25.2;
-        /// 苹方 14.25 regular 是 47 —— 差近一倍。
-        static let titleCJK = Face(size: 15, weight: .light, ps: "NotoSansCJKsc-Light")
+        /// 标题栏「画图」。本机装了微软雅黑就用真字体 —— App 实测
+        /// Noto Sans CJK SC Light 15pt meanΔ 23.45,**微软雅黑 15pt 是 22.12**。
+        /// (苹方 14.25 regular 是 47 —— 差近一倍。)
+        static let titleCJK = Face(size: 15, weight: .light, ps: "Microsoft YaHei")
 
-        /// 状态栏「像素」。Noto Sans CJK SC Thin 15.5pt,meanΔ 26.1。
-        static let statusPixelCJK = Face(size: 15.5, weight: .thin, ps: "NotoSansCJKsc-Thin")
+        /// 状态栏「像素」。微软雅黑 14.5pt,App 实测 meanΔ 25.92 → **21.15**;
+        /// Noto Sans CJK SC Thin 15.5 是 25.92,14.5 Thin(不换字体)只有 22.28 但
+        /// 全局持平。字号很敏感:微软雅黑 14pt 会掉到 25.22。
+        static let statusPixelCJK = Face(size: 14.5, weight: .thin, ps: "Microsoft YaHei")
 
         /// 状态栏「大小」。这一处反倒是苹方 Thin 最准,meanΔ 10.4
         /// (Noto Thin 是 20.6)—— 两处标签原版的字距不同,不能套同一个面。
@@ -89,7 +103,7 @@ extension WIFont {
         /// 换成 ultraLight 之后选择组 4.24→4.20、图像组 2.05→1.84、
         /// 工具组 2.11→1.94、层 1.81→1.76,四个组全降。
         /// 扫描台和 SwiftUI 的字形栅格化路径不同,以 App 实测为准。
-        static let groupLabel = Face(size: 14.5, weight: .ultraLight, scaleX: 1.1)
+        static let groupLabel = Face(size: 14.5, weight: .thin, scaleX: 1.1)
 
         /// 菜单行汉字。系统 ultraLight 19pt,meanΔ 18.5(light 是 19.7)。
         static let menuCJK = Face(size: 19, weight: .ultraLight)

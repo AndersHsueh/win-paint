@@ -103,8 +103,10 @@ SHAPE_COLS, SHAPE_ROWS = 5, 4
 SHAPE_X0, SHAPE_Y0 = 528, 102
 SHAPE_DX, SHAPE_DY = 28, 27
 SHAPE_CELL = 22
-# 只抠前三行:第四行在原版里被面板底边裁掉了,抠不全
+# 只抠前三行:第四行在原版里被面板底边裁掉了,只露出每个形状的尖
 SHAPE_BITMAP_ROWS = 3
+# 第四行在面板内可见的行数(面板底边在 y=194,cell 从 183 开始)
+SHAPE_VISIBLE_ROWS = 11
 
 
 def background_of(flat):
@@ -347,6 +349,17 @@ def main():
             y0 = SHAPE_Y0 + SHAPE_DY * j
             save(f"shape_{j * SHAPE_COLS + i:02d}",
                  alpha_rgba_linear(img[y0:y0 + SHAPE_CELL, x0:x0 + SHAPE_CELL]))
+
+    # 第 4 行(索引 15..19)在原版被面板底边裁到只剩 6px —— 五个形状只剩一个尖。
+    # 矢量画法复刻不出这个「被裁到只剩尖」的样子(五角星我方画出来是 16px 宽的宽尖,
+    # 原版只有 5px),所以整行抠成位图。只抠面板内可见的 11 行,剩下补透明。
+    y0 = SHAPE_Y0 + SHAPE_DY * SHAPE_BITMAP_ROWS
+    for i in range(SHAPE_COLS):
+        x0 = SHAPE_X0 + SHAPE_DX * i
+        cell = alpha_rgba_linear(img[y0:y0 + SHAPE_VISIBLE_ROWS, x0:x0 + SHAPE_CELL])
+        full = np.zeros((SHAPE_CELL, SHAPE_CELL, 4), dtype=np.uint8)
+        full[:SHAPE_VISIBLE_ROWS] = cell
+        save(f"shape_{SHAPE_BITMAP_ROWS * SHAPE_COLS + i:02d}", full)
 
     print(f"\n共 {len(os.listdir(OUT))} 个图标 -> {OUT}")
 

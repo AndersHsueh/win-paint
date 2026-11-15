@@ -335,21 +335,21 @@ struct RibbonView: View {
     var body: some View {
         ZStack(alignment: .topLeading) {
             HStack(alignment: .top, spacing: 0) {
-                group(width: 71, label: "选择", labelX: 21) { selectContent }
+                group(width: 71, label: "选择", labelX: 21, labelDX: -1, labelDY: 0) { selectContent }
                 separator
-                group(width: 197, label: "图像", labelX: 85) { imageContent }
+                group(width: 197, label: "图像", labelX: 85, labelDX: -1, labelDY: -1) { imageContent }
                 separator
-                group(width: 170, label: "工具", labelX: 70) { toolContent }
+                group(width: 170, label: "工具", labelX: 70, labelDX: -1, labelDY: -1) { toolContent }
                 separator
-                group(width: 64, label: "画笔", labelX: 20) { brushContent }
+                group(width: 64, label: "画笔", labelX: 20, labelDX: 0, labelDY: -1) { brushContent }
                 separator
-                group(width: 310, label: "形状", labelX: 143) { shapeContent }
+                group(width: 310, label: "形状", labelX: 143, labelDX: -1, labelDY: 0) { shapeContent }
                 separator
-                group(width: 440, label: "颜色", labelX: 205) { colorContent }
+                group(width: 440, label: "颜色", labelX: 205, labelDX: 0, labelDY: -1) { colorContent }
                 separator
-                group(width: 79, label: "Copilot", labelX: 16, labelScale: 1.09) { copilotContent }
+                group(width: 79, label: "Copilot", labelX: 16, labelScale: 1.09, labelDX: -2) { copilotContent }
                 separator
-                group(width: 80, label: "层", labelX: 32) { layerContent }
+                group(width: 80, label: "层", labelX: 32, labelDX: 0, labelDY: -1) { layerContent }
 
                 Spacer(minLength: 0)
             }
@@ -366,6 +366,7 @@ struct RibbonView: View {
 
     private func group<Content: View>(width: CGFloat, label: String, labelX: CGFloat,
                                       labelScale: CGFloat = 1.1,
+                                      labelDX: CGFloat = 0, labelDY: CGFloat = 0,
                                       @ViewBuilder content: () -> Content) -> some View {
         VStack(spacing: 0) {
             ZStack(alignment: .topLeading) { content() }
@@ -384,7 +385,7 @@ struct RibbonView: View {
                 .fixedSize()
                 .frame(width: width, height: labelHeight, alignment: .topLeading)
                 .padding(.top, 3)
-                .offset(x: labelX)
+                .offset(x: labelX + labelDX, y: labelDY)
         }
     }
 
@@ -585,9 +586,9 @@ struct ShapeGalleryBox: View {
     private let rows = Array(repeating: GridItem(.fixed(22), spacing: 5), count: 4)
 
     /// 原版截图里前三行是完整的,第四行被面板底边裁掉一截(只剩星星尖)。
-    /// 前三行用抠下来的位图保证逐像素一致;第四行原版本来就缺,继续用矢量画,
-    /// 这样往下滚动时还能看到完整图形。
-    private static let bitmapCount = 15
+    /// 前四行都用抠下来的位图保证逐像素一致(第四行抠的是被裁后剩下的那 11 行);
+    /// 第五行原版截图里根本没有,继续用矢量画,往下滚动还能看到完整图形。
+    private static let bitmapCount = 20
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
@@ -601,6 +602,9 @@ struct ShapeGalleryBox: View {
             .padding(.trailing, 20)
         }
         .frame(width: 162, height: 100)
+        // 原版第四行形状被面板底边裁掉,只露出一个尖。ScrollView 默认不裁,
+        // 第四行会画到面板边框外面去 —— 必须裁到面板高度。
+        .clipped()
         .overlay(alignment: .topTrailing) {
             // 原版右侧那根细滚动条
             RoundedRectangle(cornerRadius: 1.5)
@@ -621,10 +625,8 @@ struct ShapeGalleryBox: View {
             if index < Self.bitmapCount {
                 WIBitmapIcon(name: String(format: "shape_%02d", index))
             } else {
-                // 第四行原版被面板底边裁掉一截,这里用矢量画(往下滚还能看到完整图形),
-                // 但起始位置要下移 3px,让默认状态下露出的那一截和原版对齐。
+                // 第五行原版截图里没有,矢量画,往下滚动能看到完整图形
                 WIShapeIconView(icon: kind.galleryIcon, size: 20)
-                    .offset(y: 3)
             }
         }
         .foregroundStyle(controller.shapeKind == kind ? WIPaint.accent : WIPaint.ink)

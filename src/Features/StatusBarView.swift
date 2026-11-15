@@ -63,7 +63,7 @@ struct StatusBarView: View {
                     .font(WIFont.font(WIFont.Face.statusPixelCJK))
                     // 汉字字号比数字大,共享基线时整行被顶下去 5px,
                     // 数字归位后汉字还高 2px,再单独压回来
-                    .baselineOffset(-2))
+                    .baselineOffset(-3))
                     .monospacedDigit()
                     .foregroundStyle(WIPaint.ink)
                     .offset(x: 371, y: 10)
