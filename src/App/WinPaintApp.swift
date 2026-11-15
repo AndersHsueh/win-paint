@@ -167,6 +167,52 @@ final class AppModel {
         controller.selectionRect = nil
     }
 
+    // MARK: 剪贴板
+
+    /// App 内部的剪贴板。
+    ///
+    /// 自己复制的东西存一份在这儿,不走系统剪贴板 —— 否则用户切到别的 App 复制了
+    /// 一张图,回到画图按 ⌘V 粘回来的就不是刚才复制的那块了。
+    /// 系统剪贴板只在**跨 App** 时才读(`Clipboard.read()`)。
+    private var clipboardImage: CGImage?
+
+    /// 有选区才能复制/剪切
+    var canEditSelection: Bool { controller.selectionRect != nil }
+
+    func copySelection() {
+        guard let sel = controller.selectionRect,
+              let img = SelectionOps.copyImage(document: document, selection: sel) else { return }
+        clipboardImage = img
+        Clipboard.write(img)
+    }
+
+    func cutSelection() {
+        guard let sel = controller.selectionRect,
+              let img = SelectionOps.copyImage(document: document, selection: sel) else { return }
+        clipboardImage = img
+        Clipboard.write(img)
+        SelectionOps.eraseSelection(document: document, selection: sel)
+    }
+
+    func paste() {
+        guard let img = clipboardImage ?? Clipboard.read() else { return }
+        // 有选区就贴回选区左上角(剪切后紧接着粘贴 = 原地放回),没选区就贴到画布左上角
+        let origin: CGPoint
+        if let sel = controller.selectionRect {
+            origin = sel.origin
+        } else {
+            origin = CGPoint(x: 0, y: max(0, document.size.height - CGFloat(img.height)))
+        }
+        controller.selectionRect = SelectionOps.pasteImage(document: document, image: img, at: origin)
+    }
+
+    /// 把画布裁剪到选区(所有图层一起裁,画布尺寸跟着变)
+    func cropToSelection() {
+        guard let sel = controller.selectionRect else { return }
+        document.crop(to: sel)
+        controller.selectionRect = nil
+    }
+
     // MARK: 图像
 
     func handle(_ action: ImageAction) {
@@ -325,6 +371,15 @@ struct AppCommands: Commands {
         }
 
         CommandGroup(replacing: .pasteboard) {
+            Button("剪切") { model.cutSelection() }
+                .keyboardShortcut("x", modifiers: .command)
+                .disabled(!model.canEditSelection)
+            Button("复制") { model.copySelection() }
+                .keyboardShortcut("c", modifiers: .command)
+                .disabled(!model.canEditSelection)
+            Button("粘贴") { model.paste() }
+                .keyboardShortcut("v", modifiers: .command)
+            Divider()
             Button("全选") { model.selectAll() }
                 .keyboardShortcut("a", modifiers: .command)
             Button("取消选择") { model.clearSelection() }
@@ -338,6 +393,8 @@ struct AppCommands: Commands {
             Button("水平翻转") { model.handle(.flipHorizontal) }
             Button("垂直翻转") { model.handle(.flipVertical) }
             Divider()
+            Button("裁剪") { model.cropToSelection() }
+                .disabled(!model.canEditSelection)
             Button("调整大小…") { model.handle(.resize) }
                 .keyboardShortcut("e", modifiers: .command)
         }

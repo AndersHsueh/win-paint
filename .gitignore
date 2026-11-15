@@ -28,3 +28,13 @@ xcuserdata/
 *.moved-aside
 *.hmap
 *.ipa
+
+# 签名材料 —— 绝不入库(仓库是 public)
+*.key
+*.csr
+*.p12
+*.pfx
+*.pem
+*.cer
+*.mobileprovision
+*.entitlements.local

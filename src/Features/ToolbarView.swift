@@ -249,6 +249,12 @@ struct MenuBarRow: View {
             Button("重做") { model.redo() }
                 .disabled(!model.document.history.canRedo)
             Divider()
+            Button("剪切") { model.cutSelection() }
+                .disabled(!model.canEditSelection)
+            Button("复制") { model.copySelection() }
+                .disabled(!model.canEditSelection)
+            Button("粘贴") { model.paste() }
+            Divider()
             Button("全选") { model.selectAll() }
             Button("取消选择") { model.clearSelection() }
         } label: {

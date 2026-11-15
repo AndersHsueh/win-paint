@@ -54,11 +54,28 @@ final class BitmapCanvas {
         context.restoreGState()
     }
 
+    /// 把矩形夹到画布内,并对齐到整数像素。
+    ///
+    /// 快照的**尺寸必须和矩形尺寸严格一致** —— 不一致的话 `restore` 会把图拉伸,
+    /// 撤销一笔画在画布边缘的笔迹就会恢复出垃圾(以前就踩过:
+    /// `snapshot` 越界裁剪后返回的是交集尺寸,`restore` 又按原 rect 拉伸贴回去)。
+    func clampedRect(_ rect: CGRect) -> CGRect {
+        let bounds = CGRect(origin: .zero, size: pixelSize)
+        let r = rect.intersection(bounds)
+        guard !r.isEmpty else { return .zero }
+        let x = floor(r.minX), y = floor(r.minY)
+        let w = ceil(r.maxX) - x, h = ceil(r.maxY) - y
+        let integral = CGRect(x: x, y: y, width: w, height: h)
+        let out = integral.intersection(bounds)
+        return out.isEmpty ? .zero : out
+    }
+
     /// 区域快照。`rect` 为文档坐标(y 向上)。
     /// 返回的 CGImage 已按图像坐标(y 向下)裁好,可直接 `restore` 回原处。
+    /// 矩形会被夹到画布内并取整,返回图像尺寸恒等于实际裁到的区域。
     func snapshot(in rect: CGRect) -> CGImage? {
         guard let img = context.makeImage() else { return nil }
-        let r = rect.intersection(CGRect(origin: .zero, size: pixelSize))
+        let r = clampedRect(rect)
         guard !r.isEmpty else { return nil }
         // 文档 y 向上 → 图像 y 向下的转换
         let crop = CGRect(x: r.minX, y: pixelSize.height - r.maxY, width: r.width, height: r.height)
@@ -71,7 +88,9 @@ final class BitmapCanvas {
         context.saveGState()
         if let patch {
             context.setBlendMode(.copy)
-            context.draw(patch, in: rect)
+            // 用贴图自身的尺寸画 —— 万一尺寸对不上也不会被拉伸成糊的
+            context.draw(patch, in: CGRect(origin: rect.origin,
+                                           size: CGSize(width: patch.width, height: patch.height)))
         } else {
             context.clear(rect)
         }

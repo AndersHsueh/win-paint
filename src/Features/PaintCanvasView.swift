@@ -41,6 +41,15 @@ final class PaintCanvasView: NSView {
     private var textOrigin: CGPoint = .zero
     private var textLayerID: UUID?
 
+    // MARK: 选区拖动
+
+    /// 正在拖动选区里的内容(在已有选区内部按下并拖动)
+    private var isMovingSelection = false
+    /// 被拖动的内容(拖动开始时从图层里抓的快照)
+    private var moveContentImage: CGImage?
+    /// 拖动位移(文档坐标)
+    private var moveOffset: CGPoint = .zero
+
     // MARK: 初始化
 
     override init(frame frameRect: NSRect) {
@@ -287,6 +296,11 @@ final class PaintCanvasView: NSView {
     private func drawPreview(in ctx: CGContext) {
         guard let ctrl = controller, let doc = document else { return }
 
+        // 拖动选区:内容画在偏移后的位置(原位的像素还在图层上,松手才擦)
+        if isMovingSelection, let img = moveContentImage, let sel = ctrl.selectionRect {
+            ctx.draw(img, in: sel.offsetBy(dx: moveOffset.x, dy: moveOffset.y))
+        }
+
         // 形状预览
         if isDragging, ctrl.tool == .shape, let rect = normalizedDragRect() {
             let fillColor: CGColor? = ctrl.fillStyle == .solid ? ctrl.primaryColor.cgColor : nil
@@ -385,6 +399,20 @@ final class PaintCanvasView: NSView {
         case .magnifier:
             zoom(to: ctrl.zoom * 2, anchor: viewPoint)
         case .select, .freehandSelect, .crop:
+            // 在已有选区**内部**按下 → 拖动选区里的内容(原版行为);
+            // 在选区外面按下 → 重新框选。
+            if ctrl.tool == .select, let sel = ctrl.selectionRect, !sel.isEmpty,
+               sel.contains(docPoint), let doc = document,
+               let layer = doc.selectedLayer,
+               let content = layer.canvas.snapshot(in: sel) {
+                isMovingSelection = true
+                moveContentImage = content
+                moveOffset = .zero
+                dragStart = docPoint
+                dragCurrent = docPoint
+                needsDisplay = true
+                return
+            }
             isDragging = true
             ctrl.selectionRect = CGRect(origin: docPoint, size: .zero)
             needsDisplay = true
@@ -413,6 +441,13 @@ final class PaintCanvasView: NSView {
 
         guard let ctrl = controller else { return }
 
+        // 拖动选区内容:只更新预览,松手才真正落到图层上
+        if isMovingSelection {
+            moveOffset = CGPoint(x: docPoint.x - dragStart.x, y: docPoint.y - dragStart.y)
+            needsDisplay = true
+            return
+        }
+
         switch ctrl.tool {
         case .pencil, .brush, .eraser:
             appendStroke(at: docPoint)
@@ -432,6 +467,26 @@ final class PaintCanvasView: NSView {
             return
         }
         guard let ctrl = controller else { return }
+
+        // 松手才把拖动的选区内容真正落到图层上
+        if isMovingSelection {
+            isMovingSelection = false
+            let offset = moveOffset
+            moveContentImage = nil
+            moveOffset = .zero
+
+            if let doc = document, let sel = ctrl.selectionRect, offset != .zero {
+                ctrl.selectionRect = SelectionOps.moveContent(
+                    document: doc,
+                    from: sel,
+                    to: CGPoint(x: sel.minX + offset.x, y: sel.minY + offset.y)
+                )
+                onCommit?("移动选区")
+            }
+            needsDisplay = true
+            onChange?()
+            return
+        }
 
         switch ctrl.tool {
         case .pencil, .brush, .eraser:
@@ -670,20 +725,16 @@ final class PaintCanvasView: NSView {
         onCommit?("文本")
     }
 
-    /// 把画布内容裁剪到当前选区
+    /// 把画布裁剪到当前选区
+    ///
+    /// 裁剪是文档级的:所有图层一起裁,画布尺寸也跟着变,而且能撤销。
     func cropToSelection() {
-        guard let ctrl = controller, let doc = document,
-              let layer = doc.selectedLayer, let sel = ctrl.selectionRect else { return }
-        let rect = sel.intersection(CGRect(origin: .zero, size: doc.size)).integral
-        guard rect.width >= 1, rect.height >= 1 else { return }
-        guard let cropped = layer.canvas.snapshot(in: rect) else { return }
-        let fresh = BitmapCanvas(pixelSize: rect.size)
-        fresh.draw(image: cropped, in: CGRect(origin: .zero, size: rect.size))
-        layer.canvas = fresh
-        doc.markDirty()
+        guard let ctrl = controller, let doc = document, let sel = ctrl.selectionRect else { return }
+        doc.crop(to: sel)
         ctrl.selectionRect = nil
         needsDisplay = true
         onChange?()
+        onCommit?("裁剪")
     }
 }
 

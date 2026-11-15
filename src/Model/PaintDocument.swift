@@ -108,8 +108,12 @@ final class PaintDocument {
     // MARK: - 像素编辑事务
 
     /// 编辑前抓取区域快照
+    ///
+    /// 矩形会被夹到画布内并取整 —— 返回图像的尺寸恒等于实际抓到的区域,
+    /// 这样 `commitPatch` 记下的 before/after 才能原样贴回去。
     func capturePatch(layerID: UUID, rect: CGRect) -> CGImage? {
-        layer(with: layerID)?.canvas.snapshot(in: rect)
+        guard let layer = layer(with: layerID) else { return nil }
+        return layer.canvas.snapshot(in: layer.canvas.clampedRect(rect))
     }
 
     /// 把一张图写入图层指定区域(用于合成笔迹缓冲区)
@@ -122,8 +126,11 @@ final class PaintDocument {
     /// 结束一次像素编辑并记入历史
     func commitPatch(title: String, layerID: UUID, rect: CGRect, before: CGImage?) {
         guard let layer = layer(with: layerID) else { return }
-        guard let after = layer.canvas.snapshot(in: rect) else { return }
-        let record = PatchRecord(layerID: layerID, rect: rect, before: before, after: after)
+        // 记录用的矩形必须和快照时的矩形完全一致(都夹到画布内),
+        // 否则撤销时 before 会被按错误的尺寸拉伸贴回去。
+        let r = layer.canvas.clampedRect(rect)
+        guard !r.isEmpty, let after = layer.canvas.snapshot(in: r) else { return }
+        let record = PatchRecord(layerID: layerID, rect: r, before: before, after: after)
         history.record(HistoryEntry(title: title, actions: [.patch(record)]))
         markDirty()
         isDirty = true
@@ -263,6 +270,26 @@ final class PaintDocument {
                 for layer in layers {
                     layer.canvas = BitmapCanvas(pixelSize: clamped)
                 }
+            }
+        }
+    }
+
+    /// 把画布裁剪到选区。
+    ///
+    /// 裁剪是**文档级**操作:所有图层一起裁,画布尺寸也跟着变成选区大小 ——
+    /// 原版 Windows 画图就是这么做的(以前这里只裁当前图层、画布尺寸不变,还不可撤销)。
+    func crop(to selection: CGRect) {
+        let r = selection.intersection(CGRect(origin: .zero, size: size)).integral
+        guard r.width >= 1, r.height >= 1 else { return }
+        guard r != CGRect(origin: .zero, size: size) else { return }
+        recordStructure(title: "裁剪") {
+            size = r.size
+            for i in layers.indices {
+                let fresh = BitmapCanvas(pixelSize: r.size)
+                if let cropped = layers[i].canvas.snapshot(in: r) {
+                    fresh.draw(image: cropped, in: CGRect(origin: .zero, size: r.size))
+                }
+                layers[i].canvas = fresh
             }
         }
     }
