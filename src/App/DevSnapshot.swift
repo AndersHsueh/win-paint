@@ -16,14 +16,32 @@ enum DevSnapshot {
     static let sizeKey = "WINPAINT_SNAPSHOT_SIZE"
     static let rulersKey = "WINPAINT_SNAPSHOT_RULERS"
     static let gridKey = "WINPAINT_SNAPSHOT_GRID"
+    static let loadKey = "WINPAINT_SNAPSHOT_LOAD"
+    static let layersKey = "WINPAINT_SNAPSHOT_LAYERS"
 
-    /// 开发期:截图时把某些开关打开,用来肉眼验证它们**不是摆设**。
+    /// 开发期:截图时把某张图加载进文档,再截图。
+    ///
+    /// 用途:官网首屏要一张「真在画东西」的图,空白画布没法看。
+    /// 用法:`WINPAINT_SNAPSHOT_LOAD=/tmp/demo.png WINPAINT_SNAPSHOT=/tmp/hero.png open dist/WinPaint.app`
+    static func applyRequestedDocument(_ document: PaintDocument) {
+        guard let raw = ProcessInfo.processInfo.environment[loadKey] else { return }
+        let url = URL(fileURLWithPath: raw)
+        guard let image = PaintDocument.loadImage(at: url) else {
+            NSLog("[WinPaint] 加载演示图失败:%@", raw)
+            return
+        }
+        document.load(image: image, title: url.deletingPathExtension().lastPathComponent)
+        NSLog("[WinPaint] 已加载演示图:%@", raw)
+    }
+
+    /// 开发期:截图时把某些开关打开,用来肉眼验证它们**不是摆设**、或拍产品图。
     ///
     /// 用法:`WINPAINT_SNAPSHOT_RULERS=1 WINPAINT_SNAPSHOT=/tmp/ruler.png open dist/WinPaint.app`
     static func applyRequestedToggles(_ controller: CanvasController) {
         let env = ProcessInfo.processInfo.environment
         if env[rulersKey] != nil { controller.showsRulers = true }
         if env[gridKey] != nil { controller.showsGrid = true }
+        if env[layersKey] != nil { controller.showsLayerPanel = true }
     }
 
     /// 截图前先把窗口强行设成指定尺寸,方便和原版截图逐像素比对。

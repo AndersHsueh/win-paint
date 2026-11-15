@@ -38,3 +38,6 @@ xcuserdata/
 *.cer
 *.mobileprovision
 *.entitlements.local
+
+# 官网(webroot 只在本机放,产物发到 Cloudflare Pages,不入库)
+webroot/

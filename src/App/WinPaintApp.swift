@@ -247,6 +247,7 @@ struct WinPaintApp: App {
                 .onAppear {
                     DevSnapshot.applyRequestedWindowSize()
                     DevSnapshot.applyRequestedToggles(model.controller)
+                    DevSnapshot.applyRequestedDocument(model.document)
                     model.controller.fitToWindow()
                     DevSnapshot.scheduleIfRequested()
                 }

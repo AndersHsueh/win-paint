@@ -191,3 +191,12 @@ grep "raw/<文件名>" wiki/log.md
 - 分发包 `dist/WinPaint-0.1.0.zip`(746KB,ditto 打包保留符号链接与扩展属性);解压出来的 app 仍带 stapling 票据,实测 spctl accepted
 - **Release 已发布**:https://github.com/AndersHsueh/win-paint/releases/tag/v0.1.0 (tag v0.1.0 已推 origin)
 - 冒烟自检:公证后的 app 自截图 meanΔ 仍为 2.02(带原版标题的环境变量),无回退
+
+## [2026-11-15] engineering | 补 DMG 分发包(已公证)+ 官网素材 + 官网 PRD
+- `scripts/make-dmg.sh`:打 DMG(卷名 WinPaint 0.1.0 + /Applications 软链 + 安装说明.txt)+ 可选签名/公证/stapling
+- **DMG 本身也要公证** —— 公证过的 .app 装进没公证的 DMG,Apple 照样拒
+- DMG 已公证并 stapling,Submission ID `316980ae-0a1d-498f-b9aa-1d290a5ca0da`
+- Release v0.1.0 现挂两个资产:DMG 1.03MB(主)+ ZIP 729KB;实测挂载 DMG 里的 app 仍是 `accepted / Notarized Developer ID`
+- DevSnapshot 新增 `WINPAINT_SNAPSHOT_LOAD`(启动时加载演示图)、`WINPAINT_SNAPSHOT_LAYERS`(开图层面板)—— 用来拍真实产品图,而不是空白画布
+- 官网素材已生成到 `webroot/assets/`(webroot 整体已 gitignore):hero / hero-layers / og-image / 原版vs复刻对照 / 五张功能区局部放大 / 三档图标
+- `webroot/PRD.md`:官网完整 PRD(事实表、逐区块规格、文案、设计规范、零外链约束、验收清单)
