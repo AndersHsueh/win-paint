@@ -174,3 +174,20 @@ grep "raw/<文件名>" wiki/log.md
 - `outputs/UI复刻对照/带标尺自截图-20261115.png` —— 打开标尺后的整窗自截图(1484×985)
 - `outputs/UI复刻对照/标尺左上角放大-20261115.png` —— 左上角 220×195 放大 3 倍,可看清横向刻度数字与竖排(自下而上)的纵向刻度数字
 - 生成命令:`WINPAINT_SNAPSHOT_RULERS=1 WINPAINT_SNAPSHOT=... WINPAINT_SNAPSHOT_SIZE=1484x985 open dist/WinPaint.app`
+
+## [2026-11-15] engineering | Developer ID 证书到手 + 签名链打通
+- 用户在门户建好 **Developer ID Application** 证书(签发方 `Developer ID Certification Authority, OU=G2`,有效期至 2027-12-15),本地生成 CSR + 脚本化导入,私钥 600 权限不入库
+- 导入链路三个坑(详见 docs/签名与公证.md):
+  - Apple 给 Developer ID 的中间证书是 **G2 专用那张**,不是 WWDR —— 拿错链直接断
+  - `www.apple.com/certificateauthority/` 在墙内 403 → 改用 **Xcode 自带的 DeveloperIDCA-G2.cer**,离线可用,脚本按签发方 CN+OU 精确匹配
+  - OpenSSL 3+ 的 pkcs12 默认 AES-256+PBKDF2,**macOS 钥匙串读不了**,报 "MAC verification failed";必须显式 `-keypbe/-certpbe PBE-SHA1-3DES -macalg sha1`
+- 签名链实测完整:Developer ID Application → Developer ID Certification Authority → Apple Root CA,flags=0x10000(runtime),带 secure timestamp
+- 公证提交成功,Submission ID `6e5ec120-e770-4be7-999e-4d0c022e10b4`
+
+## [2026-11-15] deliverable | 公证通过 + GitHub Release v0.1.0 发布
+- Apple 公证结果 **Accepted**,stapling 与 validate 均通过
+- `spctl -a -vvv` 从 **rejected → accepted**,`source=Notarized Developer ID`
+- 签名链完整:Developer ID Application → Developer ID Certification Authority → Apple Root CA,flags=0x10000(runtime),带 secure timestamp
+- 分发包 `dist/WinPaint-0.1.0.zip`(746KB,ditto 打包保留符号链接与扩展属性);解压出来的 app 仍带 stapling 票据,实测 spctl accepted
+- **Release 已发布**:https://github.com/AndersHsueh/win-paint/releases/tag/v0.1.0 (tag v0.1.0 已推 origin)
+- 冒烟自检:公证后的 app 自截图 meanΔ 仍为 2.02(带原版标题的环境变量),无回退
