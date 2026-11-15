@@ -36,6 +36,8 @@ final class PaintCanvasView: NSView {
     private var panStartOffset: CGPoint = .zero
     /// 上次居中时的视口尺寸,用来判断是否需要重新居中
     private var lastFitSize: NSSize = .zero
+    /// 上次布局时标尺的状态。切换标尺会让视口缩小,得重新居中。
+    private var lastRulerOn = false
 
     private var textField: NSTextField?
     private var textOrigin: CGPoint = .zero
@@ -86,12 +88,27 @@ final class PaintCanvasView: NSView {
 
     /// 让文档完整落在视图内
     func fitToWindow() {
-        guard let doc = document, bounds.width > 1, bounds.height > 1 else { return }
-        let scale = min(bounds.width / doc.size.width, bounds.height / doc.size.height)
+        guard let doc = document else { return }
+        let vp = viewportRect
+        guard vp.width > 1, vp.height > 1 else { return }
+        let scale = min(vp.width / doc.size.width, vp.height / doc.size.height)
         controller?.zoom = max(min(scale, 1.0), 0.02)
         centerCanvas()
         needsDisplay = true
         onChange?()
+    }
+
+    /// 标尺条的厚度。查看 → 标尺 打开时,视口的上边和左边各让出一条给标尺。
+    private var rulerThickness: CGFloat {
+        controller?.showsRulers == true ? Ruler.thickness : 0
+    }
+
+    /// 画布视口(标尺打开时,视口要让出上边和左边那两条)
+    private var viewportRect: CGRect {
+        let t = rulerThickness
+        return CGRect(x: t, y: 0,
+                      width: max(1, bounds.width - t),
+                      height: max(1, bounds.height - t))
     }
 
     /// 按当前缩放把文档重新摆到视口正中(不改缩放倍率)。
@@ -101,15 +118,16 @@ final class PaintCanvasView: NSView {
     /// 再也不重算,结果画布整体偏移了 22px/36px。所以这里必须能在 bounds 变化后
     /// 重新居中,只要用户还没手动平移过。
     func centerCanvas() {
-        guard let doc = document, let ctrl = controller,
-              bounds.width > 1, bounds.height > 1 else { return }
+        guard let doc = document, let ctrl = controller else { return }
+        let vp = viewportRect
+        guard vp.width > 1, vp.height > 1 else { return }
         ctrl.pan = CGPoint(
-            x: (bounds.width - doc.size.width * ctrl.zoom) / 2,
+            x: vp.minX + (vp.width - doc.size.width * ctrl.zoom) / 2,
             // 原版画布内容比精确居中高 2px(照片 265..894 而不是 267..896),
             // 这里照抄原版的偏移量,保证 1:1 像素对齐。
             // 实测最优是 +1.4:offset 每 +1 画布往**上**移 1px(AppKit 坐标 y 向上),
             // +2 时画布顶边落在 264.55、比原版的 265 高了半像素。
-            y: (bounds.height - doc.size.height * ctrl.zoom) / 2 + 1.4
+            y: vp.minY + (vp.height - doc.size.height * ctrl.zoom) / 2 + 1.4
         )
         needsDisplay = true
     }
@@ -128,24 +146,31 @@ final class PaintCanvasView: NSView {
 
     override func setFrameSize(_ newSize: NSSize) {
         super.setFrameSize(newSize)
-        controller?.viewportSize = newSize
+        controller?.viewportOrigin = CGPoint(x: rulerThickness, y: 0)
+        controller?.viewportSize = viewportRect.size
         needsDisplay = true
     }
 
     override func layout() {
         super.layout()
-        controller?.viewportSize = bounds.size
-        guard let ctrl = controller, bounds.width > 1, bounds.height > 1 else { return }
+        controller?.viewportOrigin = CGPoint(x: rulerThickness, y: 0)
+        controller?.viewportSize = viewportRect.size
+        guard let ctrl = controller else { return }
+        let vp = viewportRect
+        guard vp.width > 1, vp.height > 1 else { return }
         if !ctrl.didInitialFit {
             // 原版打开时就是 100% 缩放 + 在画布区居中,不做「适应窗口」缩放
             ctrl.didInitialFit = true
             ctrl.zoom = 1.0
             centerCanvas()
             lastFitSize = bounds.size
-        } else if !ctrl.didUserPan, bounds.size != lastFitSize {
-            // bounds 又变了(窗口尺寸变化 / 工具选项栏出现)→ 重新居中,保持 1:1 像素对齐。
-            // 只在尺寸真的变了时才写 pan,避免在 layout 里反复改 @Observable 触发循环。
+            lastRulerOn = ctrl.showsRulers
+        } else if !ctrl.didUserPan, bounds.size != lastFitSize || ctrl.showsRulers != lastRulerOn {
+            // bounds 又变了(窗口尺寸变化 / 工具选项栏出现)或者标尺开关变了
+            // → 重新居中,保持 1:1 像素对齐。
+            // 只在状态真的变了时才写 pan,避免在 layout 里反复改 @Observable 触发循环。
             lastFitSize = bounds.size
+            lastRulerOn = ctrl.showsRulers
             centerCanvas()
         }
     }
@@ -204,6 +229,92 @@ final class PaintCanvasView: NSView {
         if let selection = ctrl.selectionRect {
             drawSelection(in: ctx, docRect: selection)
         }
+
+        // 标尺画在最上层(它占的是视口外那两条,不压画布)
+        drawRulers(in: ctx)
+    }
+
+    /// 画标尺:上边一条量横向,左边一条量纵向。
+    ///
+    /// 刻度单位是**文档像素**,步长随缩放自动挑,保证刻度在屏幕上不小于 46px 间距。
+    /// 左边那条的数字转 90°(和原版一样竖着排)。
+    private func drawRulers(in ctx: CGContext) {
+        let t = rulerThickness
+        guard t > 0, let ctrl = controller, let doc = document else { return }
+        let vp = viewportRect
+
+        ctx.saveGState()
+
+        // 底色 + 内侧那条分隔线
+        ctx.setFillColor(NSColor(white: 0.97, alpha: 1).cgColor)
+        ctx.fill(CGRect(x: 0, y: vp.maxY, width: bounds.width, height: t))
+        ctx.fill(CGRect(x: 0, y: 0, width: t, height: vp.maxY))
+
+        ctx.setStrokeColor(NSColor(white: 0.70, alpha: 1).cgColor)
+        ctx.setLineWidth(1)
+        ctx.move(to: CGPoint(x: 0, y: vp.maxY))
+        ctx.addLine(to: CGPoint(x: bounds.width, y: vp.maxY))
+        ctx.move(to: CGPoint(x: t, y: 0))
+        ctx.addLine(to: CGPoint(x: t, y: vp.maxY))
+        ctx.strokePath()
+
+        let zoom = ctrl.zoom
+        let step = Ruler.step(zoom: zoom)
+        let tickColor = NSColor(white: 0.45, alpha: 1)
+
+        // 刻度和数字都裁在标尺条里 —— 竖排数字旋转后字身会往右溢出,
+        // 不裁的话会压到画布上。
+        let strips = CGMutablePath()
+        strips.addRect(CGRect(x: 0, y: vp.maxY, width: bounds.width, height: t))
+        strips.addRect(CGRect(x: 0, y: 0, width: t, height: vp.maxY))
+        ctx.addPath(strips)
+        ctx.clip()
+
+        // 上边:量横向
+        ctx.setStrokeColor(tickColor.cgColor)
+        ctx.setLineWidth(1)
+        var docX: CGFloat = 0
+        while docX <= doc.size.width + step {
+            let vx = ctrl.pan.x + docX * zoom
+            if vx >= vp.minX - 0.5, vx <= vp.maxX + 0.5 {
+                ctx.move(to: CGPoint(x: vx, y: vp.maxY))
+                ctx.addLine(to: CGPoint(x: vx, y: vp.maxY + 6))
+                let label = rulerLabel("\(Int(docX))")
+                TextRenderer.draw(label, at: CGPoint(x: vx + 2, y: vp.maxY + 1), in: ctx)
+            }
+            docX += step
+        }
+        ctx.strokePath()
+
+        // 左边:量纵向,数字转 90°(基线沿 -y 方向,字身往 +x 展开)
+        ctx.setStrokeColor(tickColor.cgColor)
+        var docY: CGFloat = 0
+        while docY <= doc.size.height + step {
+            let vy = ctrl.pan.y + docY * zoom
+            if vy >= 0, vy <= vp.maxY {
+                ctx.move(to: CGPoint(x: t, y: vy))
+                ctx.addLine(to: CGPoint(x: t - 6, y: vy))
+                let label = rulerLabel("\(Int(docY))")
+                ctx.saveGState()
+                // 锚点往左让出字身的高度(9pt 字的 ascent 约 7px)
+                ctx.translateBy(x: t - 9, y: vy - 2)
+                ctx.rotate(by: -.pi / 2)
+                TextRenderer.draw(label, at: .zero, in: ctx)
+                ctx.restoreGState()
+            }
+            docY += step
+        }
+        ctx.strokePath()
+
+        ctx.restoreGState()
+    }
+
+    /// 标尺上的数字
+    private func rulerLabel(_ text: String) -> NSAttributedString {
+        NSAttributedString(string: text, attributes: [
+            .font: NSFont.systemFont(ofSize: 9),
+            .foregroundColor: NSColor(white: 0.45, alpha: 1),
+        ])
     }
 
     /// 画布四周的投影暗线(原版实测:上 1px / 左 2px / 右 1px / 下 2px)
@@ -371,6 +482,41 @@ final class PaintCanvasView: NSView {
     // MARK: 鼠标
 
     override var acceptsFirstResponder: Bool { true }
+
+    /// 键盘:Delete 清除选区内容、Esc 取消选择。
+    ///
+    /// 原版 Windows 画图里 Delete 是「删除选区中的内容」(不是删除整张图),
+    /// Esc 是取消选择。这两条以前只有 macOS 菜单里的快捷键,窗口内按键盘没反应。
+    override func keyDown(with event: NSEvent) {
+        guard let ctrl = controller, let doc = document else {
+            super.keyDown(with: event)
+            return
+        }
+
+        // 51 = 前向删除,117 = 删除
+        if event.keyCode == 51 || event.keyCode == 117 {
+            if let sel = ctrl.selectionRect {
+                SelectionOps.eraseSelection(document: doc, selection: sel, title: "清除")
+                ctrl.selectionRect = nil
+                needsDisplay = true
+                onChange?()
+                onCommit?("清除")
+                return
+            }
+        }
+
+        // 53 = Esc
+        if event.keyCode == 53 {
+            if ctrl.selectionRect != nil {
+                ctrl.selectionRect = nil
+                needsDisplay = true
+                onChange?()
+                return
+            }
+        }
+
+        super.keyDown(with: event)
+    }
 
     override func mouseDown(with event: NSEvent) {
         window?.makeFirstResponder(self)

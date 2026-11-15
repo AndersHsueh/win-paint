@@ -14,6 +14,17 @@ enum DevSnapshot {
     static let pathKey = "WINPAINT_SNAPSHOT"
     static let exitKey = "WINPAINT_SNAPSHOT_EXIT"
     static let sizeKey = "WINPAINT_SNAPSHOT_SIZE"
+    static let rulersKey = "WINPAINT_SNAPSHOT_RULERS"
+    static let gridKey = "WINPAINT_SNAPSHOT_GRID"
+
+    /// 开发期:截图时把某些开关打开,用来肉眼验证它们**不是摆设**。
+    ///
+    /// 用法:`WINPAINT_SNAPSHOT_RULERS=1 WINPAINT_SNAPSHOT=/tmp/ruler.png open dist/WinPaint.app`
+    static func applyRequestedToggles(_ controller: CanvasController) {
+        let env = ProcessInfo.processInfo.environment
+        if env[rulersKey] != nil { controller.showsRulers = true }
+        if env[gridKey] != nil { controller.showsGrid = true }
+    }
 
     /// 截图前先把窗口强行设成指定尺寸,方便和原版截图逐像素比对。
     /// 用法:`WINPAINT_SNAPSHOT_SIZE=1484x985`

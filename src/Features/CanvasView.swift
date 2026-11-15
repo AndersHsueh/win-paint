@@ -15,6 +15,8 @@ struct CanvasView: View {
             .onChange(of: controller.pan) { _, _ in }
             .onChange(of: controller.selectionRect) { _, _ in }
             .onChange(of: controller.showsGrid) { _, _ in }
+            // 标尺开关会改变视口大小 → 要重新布局并重新居中
+            .onChange(of: controller.showsRulers) { _, _ in }
             .onChange(of: document.selectedLayerIndex) { _, _ in }
             // 底色透明,由外层 Mica 背景负责
     }
@@ -35,6 +37,8 @@ private struct CanvasRepresentable: NSViewRepresentable {
     func updateNSView(_ nsView: PaintCanvasView, context: Context) {
         nsView.controller = controller
         nsView.document = document
+        // 标尺开关只改视口、不改 frame,得显式让视图重排一次才会重新居中
+        nsView.needsLayout = true
         nsView.needsDisplay = true
     }
 }

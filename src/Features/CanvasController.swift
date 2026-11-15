@@ -65,6 +65,9 @@ final class CanvasController {
 
     // MARK: 缩放
 
+    /// 画布视口在视图里的左上角。标尺打开时视口要让出上边和左边,这里记着偏移量,
+    /// 缩放锚点、居中、适应窗口都得按它算。
+    var viewportOrigin: CGPoint = .zero
     /// 画布视口尺寸(由 NSView 布局时同步)
     var viewportSize: CGSize = .zero
 
@@ -75,7 +78,8 @@ final class CanvasController {
         // 百分比文字和滑块对不上。
         let clamped = min(max(value, 0.05), 8)
         guard zoom > 0 else { zoom = clamped; return }
-        let center = CGPoint(x: viewportSize.width / 2, y: viewportSize.height / 2)
+        let center = CGPoint(x: viewportOrigin.x + viewportSize.width / 2,
+                             y: viewportOrigin.y + viewportSize.height / 2)
         let docPoint = CGPoint(x: (center.x - pan.x) / zoom, y: (center.y - pan.y) / zoom)
         zoom = clamped
         pan = CGPoint(x: center.x - docPoint.x * clamped, y: center.y - docPoint.y * clamped)
@@ -87,8 +91,8 @@ final class CanvasController {
         let scale = min(viewportSize.width / doc.size.width, viewportSize.height / doc.size.height)
         zoom = min(max(scale, 0.02), 1.0)
         pan = CGPoint(
-            x: (viewportSize.width - doc.size.width * zoom) / 2,
-            y: (viewportSize.height - doc.size.height * zoom) / 2
+            x: viewportOrigin.x + (viewportSize.width - doc.size.width * zoom) / 2,
+            y: viewportOrigin.y + (viewportSize.height - doc.size.height * zoom) / 2
         )
         didUserPan = false
     }
@@ -103,5 +107,26 @@ enum ByteFormat {
         let mb = kb / 1024
         if mb < 1024 { return String(format: "%.1fMB", mb) }
         return String(format: "%.2fGB", mb / 1024)
+    }
+}
+
+/// 标尺(查看 → 标尺)。
+///
+/// 刻度单位是**文档像素**,步长随缩放自动挑 —— 缩得太小时如果还用固定步长,
+/// 刻度会挤成一团;放大后固定步长又会让刻度稀得只剩几个数字。
+enum Ruler {
+    /// 标尺条厚度(视口上边和左边各让出这么宽)
+    static let thickness: CGFloat = 18
+
+    /// 刻度步长的候选档(文档像素)
+    static let candidates: [CGFloat] = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000]
+
+    /// 刻度步长。挑最小的、保证屏幕上间距不小于 46px 的那一档。
+    ///
+    /// 注意步长是**文档像素**,所以放大时步长反而会变小(要覆盖同样长的屏幕距离,
+    /// 需要的文档像素更少)—— 这是对的,别把它当成单调递增的函数。
+    static func step(zoom: CGFloat) -> CGFloat {
+        for c in candidates where c * zoom >= 46 { return c }
+        return candidates[candidates.count - 1]
     }
 }

@@ -161,3 +161,11 @@ grep "raw/<文件名>" wiki/log.md
 - 新增 `Tests/WinPaintTests/SelectionTests.swift` 18 例;全量 **76/76 绿**(原 58)
 - 回归测试有效性已验证:临时撤掉修复,两个用例立刻变红
 - 冒烟自检:全局 meanΔ 仍为 2.02,UI 未退化
+
+## [2026-11-15] engineering | 标尺从假开关变成真标尺 + Delete 清除选区
+- **标尺**:此前 `showsRulers` 勾上后画布什么都不画(假开关)。现补完整标尺:上边量横向、左边量纵向(数字竖排),刻度单位是文档像素,步长随缩放自动挑最小可读档(屏幕间距 ≥46px)
+- 标尺打开时画布视口要让出上边和左边各 18px —— `CanvasController` 新增 `viewportOrigin`,缩放锚点/居中/适应窗口都按它算
+- 刻度与数字裁在标尺条内(竖排数字旋转后字身会往右溢出压到画布上)
+- **Delete / 前向删除**:清除选区内容(进历史);**Esc**:取消选择。两条以前只有 macOS 菜单快捷键,窗口内按键盘没反应
+- 新增 `Ruler` 纯函数(刻度步长),3 个用例;全量 **79/79 绿**
+- DevSnapshot 新增 `WINPAINT_SNAPSHOT_RULERS=1` / `WINPAINT_SNAPSHOT_GRID=1`,用来肉眼验证开关不是摆设

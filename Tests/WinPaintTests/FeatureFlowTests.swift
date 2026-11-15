@@ -150,6 +150,39 @@ final class FeatureFlowTests: XCTestCase {
         XCTAssertTrue(c.showsStatusBar, "开图层面板把状态栏关了")
     }
 
+    // MARK: - 标尺
+
+    /// 标尺刻度在屏幕上不能挤成一团(间距至少 46px),也不能稀得只剩几个数字
+    func testRulerStepKeepsTicksReadable() {
+        for zoom in [0.05, 0.1, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0] {
+            let step = Ruler.step(zoom: CGFloat(zoom))
+            XCTAssertGreaterThan(step, 0, "步长为 0 会死循环")
+            XCTAssertGreaterThanOrEqual(step * CGFloat(zoom), 46,
+                                        "倍率 \(zoom) 下刻度挤在一起了")
+        }
+    }
+
+    /// 步长要挑的是**最小**的那一档 —— 再大一档刻度就浪费屏幕了。
+    ///
+    /// 注意步长单位是文档像素,所以放大时步长反而变小(覆盖同样长的屏幕距离
+    /// 需要的文档像素更少)。别把它当成单调递增的函数。
+    func testRulerStepPicksSmallestReadableStep() {
+        for zoom in [0.05, 0.1, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0] {
+            let step = Ruler.step(zoom: CGFloat(zoom))
+            if let idx = Ruler.candidates.firstIndex(of: step), idx > 0 {
+                let smaller = Ruler.candidates[idx - 1]
+                XCTAssertLessThan(smaller * CGFloat(zoom), 46,
+                                  "倍率 \(zoom) 下步长挑大了:应该用 \(smaller) 而不是 \(step)")
+            }
+        }
+    }
+
+    /// 缩放为 0 的极端情况也不能给出 0 步长(那会让画标尺的循环停不下来)
+    func testRulerStepNeverZero() {
+        XCTAssertGreaterThan(Ruler.step(zoom: 0), 0)
+        XCTAssertGreaterThan(Ruler.step(zoom: -1), 0)
+    }
+
     // MARK: - AppModel 动作
 
     /// 全选 / 取消选择
