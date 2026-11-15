@@ -169,3 +169,8 @@ grep "raw/<文件名>" wiki/log.md
 - **Delete / 前向删除**:清除选区内容(进历史);**Esc**:取消选择。两条以前只有 macOS 菜单快捷键,窗口内按键盘没反应
 - 新增 `Ruler` 纯函数(刻度步长),3 个用例;全量 **79/79 绿**
 - DevSnapshot 新增 `WINPAINT_SNAPSHOT_RULERS=1` / `WINPAINT_SNAPSHOT_GRID=1`,用来肉眼验证开关不是摆设
+
+## [2026-11-15] deliverable | 带标尺自截图(验证标尺不是摆设)
+- `outputs/UI复刻对照/带标尺自截图-20261115.png` —— 打开标尺后的整窗自截图(1484×985)
+- `outputs/UI复刻对照/标尺左上角放大-20261115.png` —— 左上角 220×195 放大 3 倍,可看清横向刻度数字与竖排(自下而上)的纵向刻度数字
+- 生成命令:`WINPAINT_SNAPSHOT_RULERS=1 WINPAINT_SNAPSHOT=... WINPAINT_SNAPSHOT_SIZE=1484x985 open dist/WinPaint.app`
