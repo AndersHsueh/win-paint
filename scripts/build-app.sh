@@ -17,8 +17,16 @@ DIST="$ROOT/dist"
 APP="$DIST/$APP_NAME.app"
 CONFIG="${1:-release}"
 
-# Developer ID 分发身份(团队 BP6XLRFH4K)。公证必须用它,Apple Development 证书不行。
-SIGN_IDENTITY="${WINPAINT_SIGN_IDENTITY:-Apple Distribution: Anders Hsueh (BP6XLRFH4K)}"
+# Developer ID 分发身份。公证**必须**用 "Developer ID Application" 证书。
+#
+# ⚠️ 坑:Xcode 14.3 之后,Developer ID Application 和 Mac App Distribution
+# 在钥匙串里**都显示叫 "Apple Distribution"**。但它们是两回事:
+#   - Developer ID Application (OID 1.2.840.113635.100.6.1.4) → 能公证、能外发
+#   - Mac App Distribution  (OID 1.2.840.113635.100.6.1.7) → 只能上 App Store,
+#     用它公证会被 Apple 判 Invalid:「The binary is not signed with a valid
+#     Developer ID certificate.」
+# 所以这里按名字找 **Developer ID Application**,不要用 "Apple Distribution"。
+SIGN_IDENTITY="${WINPAINT_SIGN_IDENTITY:-}"
 
 echo "==> swift build ($CONFIG)"
 if [ "${WINPAINT_UNIVERSAL:-0}" = "1" ]; then
@@ -69,6 +77,21 @@ if [ "${WINPAINT_ADHOC:-0}" = "1" ]; then
   codesign --force --sign - "$APP"
   echo "    ad-hoc 签名(未公证,只适合本机)"
 else
+  if [ -z "$SIGN_IDENTITY" ]; then
+    # 从钥匙串里挑 Developer ID Application(见上面 SIGN_IDENTITY 的坑说明)
+    # 注意 `|| true`:grep 没匹配时返回 1,set -e + pipefail 会让脚本静默退出。
+    SIGN_IDENTITY="$(security find-identity -v -p codesigning 2>/dev/null \
+      | grep 'Developer ID Application' | head -1 | sed 's/.*"\(.*\)"/\1/' || true)"
+  fi
+  if [ -z "$SIGN_IDENTITY" ]; then
+    echo "❌ 钥匙串里没有 Developer ID Application 证书 —— 公证必须用它。"
+    echo "   (App Store Connect 签发的 \"Apple Distribution\" 是 Mac App Distribution,公证会拒)"
+    echo "   怎么弄:https://developer.apple.com/account/resources/certificates/list 新建一张,"
+    echo "   或「钥匙串访问 → 菜单 证书助理 → 创建证书…」一步到位。"
+    echo "   当前可用身份:"
+    security find-identity -v -p codesigning | sed 's/^/   /'
+    exit 1
+  fi
   if ! security find-identity -v -p codesigning | grep -qF "$SIGN_IDENTITY"; then
     echo "❌ 钥匙串里找不到签名身份:$SIGN_IDENTITY"
     echo "   可用身份:"

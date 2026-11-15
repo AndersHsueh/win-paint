@@ -28,9 +28,14 @@ TEAM="BP6XLRFH4K"
 
 [ -d "$APP" ] || { echo "❌ 找不到 $APP,先跑 ./scripts/build-app.sh"; exit 1; }
 
-# 凭据没存的话先提示,别等提交到一半才失败
-if ! security find-generic-password -s "notarytool" -a "${PROFILE}" >/dev/null 2>&1; then
-  echo "❌ 钥匙串里没有公证凭据 profile=${PROFILE}。先执行:"
+# 凭据没存的话先提示,别等提交到一半才失败。
+#
+# ⚠️ 不要用 `security find-generic-password -s notarytool -a <profile>` 来判断 ——
+# macOS 26 上这个条目不在 `security` 看得见的经典登录钥匙串里(实测查不到),
+# 但 notarytool 自己能正常解密(它走的是自己的查找路径)。
+# 所以直接问 notarytool:能列出提交历史 = 凭据可用。
+if ! xcrun notarytool history --keychain-profile "$PROFILE" --output-format json >/dev/null 2>&1; then
+  echo "❌ 钥匙串里没有可用的公证凭据 profile=${PROFILE}。先执行:"
   echo "     xcrun notarytool store-credentials $PROFILE --apple-id <你的 Apple ID> --team-id ${TEAM}"
   echo "   (终端会弹安全输入框要密码,用 app-specific password,不要用 Apple ID 登录密码)"
   exit 1
